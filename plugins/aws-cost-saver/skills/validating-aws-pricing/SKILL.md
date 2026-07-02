@@ -30,13 +30,13 @@ This skill validates pricing for ALL findings using the Zero Hallucination Prici
 
 ```bash
 # Validate with default $100 threshold (queries API only for >$100 findings)
-python3 "${CLAUDE_SKILL_DIR}/scripts/validate_pricing.py" findings.json --profile your-profile
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/validating-aws-pricing/scripts/validate_pricing.py" findings.json --profile your-profile
 
 # Lower threshold to validate more findings
-python3 "${CLAUDE_SKILL_DIR}/scripts/validate_pricing.py" findings.json --profile your-profile --threshold 50
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/validating-aws-pricing/scripts/validate_pricing.py" findings.json --profile your-profile --threshold 50
 
 # Works with any AWS auth method (SSO, access keys, IAM role)
-python3 "${CLAUDE_SKILL_DIR}/scripts/validate_pricing.py" findings.json  # uses default credentials
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/validating-aws-pricing/scripts/validate_pricing.py" findings.json  # uses default credentials
 ```
 
 ## What Gets Updated

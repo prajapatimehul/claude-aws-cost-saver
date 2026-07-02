@@ -20,10 +20,10 @@ Multi-perspective review of cost optimization findings with confidence-based fil
 
 ```bash
 # Review findings and update findings.json in place
-python3 "${CLAUDE_SKILL_DIR}/scripts/review_findings.py" findings.json --profile your-profile
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/reviewing-findings/scripts/review_findings.py" findings.json --profile your-profile
 
 # Re-review findings that already carry a review_status
-python3 "${CLAUDE_SKILL_DIR}/scripts/review_findings.py" findings.json --force
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/reviewing-findings/scripts/review_findings.py" findings.json --force
 ```
 
 For the detailed per-check confidence matrices and false-positive patterns, read
