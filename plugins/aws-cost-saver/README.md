@@ -1,6 +1,6 @@
 # aws-cost-saver
 
-173 AWS cost-optimization checks across 11 domains, bundled as a plugin for **Claude Code** and **Codex**. Read-only by design — every finding is priced from the AWS Pricing API or a verified table, never guessed.
+174 AWS cost-optimization checks across 11 domains, bundled as a plugin for **Claude Code** and **Codex**. Read-only by design — every finding is priced from the AWS Pricing API or a verified table, never guessed.
 
 ## Install
 
@@ -47,7 +47,7 @@ This plugin configures the [AWS API MCP server](https://github.com/awslabs/mcp/t
 The plugin ships alongside a Python CLI (`main.py` at the repo root) for offline use:
 
 ```bash
-python main.py checks                       # list all 173 checks
+python main.py checks                       # list all 174 checks
 python main.py check EC2-001                # detail for one check
 python main.py spend-hotspots --profile X   # rank scan order by actual spend
 python main.py report --findings findings.json

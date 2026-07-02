@@ -34,6 +34,15 @@ ADJUSTMENTS = {
     "consistent_pattern": +20,
     "burst_pattern": -25,
     "insufficient_data": -30,
+    "missing_pricing_source": -60,
+    "iac_managed_delete": -10,
+}
+
+ALLOWED_PRICING_SOURCES = {
+    "aws_pricing_api",
+    "verified_table",
+    "aws_cost_explorer",
+    "pricing_unknown",
 }
 
 # Name patterns
@@ -44,7 +53,9 @@ PROD_PATTERNS = re.compile(r'(prod|production|live|prd)', re.IGNORECASE)
 
 def run_aws_command(command: str, profile: str) -> dict | None:
     """Execute AWS CLI command and return JSON response."""
-    full_command = f"{command} --profile {profile} --output json"
+    full_command = f"{command} --output json"
+    if profile:
+        full_command += f" --profile {profile}"
     try:
         result = subprocess.run(
             full_command,
@@ -83,6 +94,34 @@ def detect_environment(resource_id: str, details: dict) -> str:
 def detect_dr_standby(resource_id: str) -> bool:
     """Check if resource appears to be DR/standby."""
     return bool(DR_PATTERNS.search(resource_id))
+
+
+def is_iac_managed(details: dict) -> bool:
+    """Detect common IaC markers in resource tags/details."""
+    tags = details.get("tags", {})
+    if isinstance(tags, list):
+        normalized_tags = {}
+        for tag in tags:
+            if isinstance(tag, dict) and "Key" in tag and "Value" in tag:
+                normalized_tags[tag["Key"]] = tag["Value"]
+        tags = normalized_tags
+
+    if not isinstance(tags, dict):
+        tags = {}
+
+    iac_keys = {
+        "aws:cloudformation:stack-name",
+        "aws:cloudformation:stack-id",
+        "aws:cloudformation:logical-id",
+        "terraform",
+        "terraform_workspace",
+        "eksctl.cluster.k8s.io/v1alpha1/cluster-name",
+    }
+    lower_keys = {key.lower() for key in tags.keys()}
+    if any(key in lower_keys for key in iac_keys):
+        return True
+
+    return bool(details.get("managed_by_iac"))
 
 
 def check_asg_membership(instance_id: str, profile: str) -> bool:
@@ -138,6 +177,16 @@ def analyze_finding(finding: dict, profile: str) -> dict:
     confidence = original_confidence
     notes = []
 
+    pricing_source = details.get("pricing_source")
+    if pricing_source not in ALLOWED_PRICING_SOURCES:
+        confidence += ADJUSTMENTS["missing_pricing_source"]
+        adjustments_applied.append(("missing_pricing_source", ADJUSTMENTS["missing_pricing_source"]))
+        notes.append("Missing or invalid pricing_source metadata")
+    elif pricing_source == "pricing_unknown" and finding.get("monthly_savings", 0) > 0:
+        confidence += ADJUSTMENTS["missing_pricing_source"]
+        adjustments_applied.append(("pricing_unknown_with_savings", ADJUSTMENTS["missing_pricing_source"]))
+        notes.append("pricing_unknown cannot have savings greater than zero")
+
     # 1. Environment detection
     env = detect_environment(resource_id, details)
     if env == "development":
@@ -179,6 +228,12 @@ def analyze_finding(finding: dict, profile: str) -> dict:
         confidence += 15
         adjustments_applied.append(("compute_optimizer_ml", +15))
         notes.append("ML-validated by AWS Compute Optimizer")
+
+    recommendation = finding.get("recommendation", "").lower()
+    if is_iac_managed(details) and any(word in recommendation for word in ("delete", "terminate", "remove", "release", "deregister")):
+        confidence += ADJUSTMENTS["iac_managed_delete"]
+        adjustments_applied.append(("iac_managed_delete", ADJUSTMENTS["iac_managed_delete"]))
+        notes.append("IaC-managed resource - validate change in source configuration before deletion")
 
     # 5. Data sufficiency check
     days_monitored = details.get("days_monitored") or details.get("evaluation_period_days")
@@ -362,7 +417,7 @@ def review_findings(findings_path: str, profile: str, threshold: int = 50, force
 def main():
     parser = argparse.ArgumentParser(description="Review AWS cost optimization findings")
     parser.add_argument("findings_file", help="Path to findings.json")
-    parser.add_argument("--profile", required=True, help="AWS profile name")
+    parser.add_argument("--profile", default="", help="AWS profile name")
     parser.add_argument("--threshold", type=int, default=50, help="Confidence threshold (default: 50)")
     parser.add_argument("--force", action="store_true", help="Re-review already reviewed findings")
 

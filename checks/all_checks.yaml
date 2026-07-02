@@ -1,12 +1,12 @@
 # AWS Cost Optimization - Complete Check Registry
-# 150+ checks across 10 domains with AWS CLI commands for scanning
+# 174 checks across 11 domains with AWS CLI commands for scanning
 # Focused on direct cost savings (removed compliance-only checks)
 
-version: "5.0"
-total_checks: 173
+version: "5.1"
+total_checks: 174
 
 # ============================================================================
-# COMPUTE DOMAIN (25 checks)
+# COMPUTE DOMAIN (27 checks)
 # ============================================================================
 compute:
   - id: EC2-001
@@ -290,7 +290,7 @@ compute:
     recommendation: High-memory instances at low CPU may be cache servers, not idle
 
 # ============================================================================
-# STORAGE DOMAIN (22 checks) - includes logs optimization
+# STORAGE DOMAIN (24 checks) - includes logs optimization
 # ============================================================================
 storage:
   - id: S3-001
@@ -715,7 +715,7 @@ database:
     recommendation: Delete unused clusters
 
 # ============================================================================
-# NETWORKING DOMAIN (15 checks)
+# NETWORKING DOMAIN (19 checks)
 # ============================================================================
 networking:
   - id: NET-001
@@ -890,6 +890,19 @@ networking:
     note: "Surfaces hidden data transfer costs most tools miss. Cross-AZ = $0.02/GB roundtrip, NAT = $0.045/GB processing"
     recommendation: Review data transfer patterns and optimize placement, caching, or VPC endpoints
 
+  - id: NET-018
+    name: Public IPv4 Address Charges
+    description: In-use public IPv4 addresses incur hourly charges even when attached to running resources
+    severity: high
+    category: overprovisioned
+    aws_cli:
+      - aws ec2 describe-network-interfaces
+      - aws ec2 describe-addresses
+      - aws ec2 describe-ipam-resource-discoveries
+      - aws ec2 get-ipam-discovered-public-addresses --ipam-resource-discovery-id {resource_discovery_id} --address-region {region}
+    note: "Use Public IP Insights when IPAM is enabled for the most complete view. Exact rate is $0.005 per public IPv4 address-hour."
+    recommendation: Remove unnecessary public IPv4 addresses, prefer private subnets, and front workloads with ALB/NLB, CloudFront, or IPv6 where possible
+
   - id: R53-001
     name: Unused Route 53 Hosted Zones
     description: Route 53 hosted zones with no records beyond defaults ($0.50/zone/month)
@@ -1013,7 +1026,7 @@ serverless:
     recommendation: Use Express workflows for high-volume, short-duration workloads
 
 # ============================================================================
-# RESERVATIONS DOMAIN (10 checks)
+# RESERVATIONS DOMAIN (12 checks)
 # ============================================================================
 reservations:
   - id: RI-001
@@ -1135,7 +1148,7 @@ reservations:
     recommendation: Review and purchase recommended Savings Plans
 
 # ============================================================================
-# CONTAINERS DOMAIN (15 checks) - ECS, EKS, Fargate
+# CONTAINERS DOMAIN (16 checks) - ECS, EKS, Fargate
 # ============================================================================
 containers:
   - id: ECS-001
@@ -1914,5 +1927,5 @@ storage_advanced:
 #   NET-017 (DT Breakdown), R53-001 (Unused Zones), RI-007 (RI Purchase Rec),
 #   SP-005 (SP Purchase Rec), CT-001 (CloudTrail Data Events),
 #   SECRETS-001 (Unused Secrets), ECR-001 (Image Lifecycle)
-# Total: 173 checks (was 163)
+# Total: 174 checks
 # ============================================================================

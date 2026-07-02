@@ -8,7 +8,8 @@ Usage:
     python main.py scan                    # Scan account using AWS MCP
     python main.py scan --from-cur <file>  # Analyze from CUR file
     python main.py report                  # Generate report from last scan
-    python main.py checks                  # List all 173 checks
+    python main.py spend-hotspots          # Rank scan focus using Cost Explorer
+    python main.py checks                  # List all 174 checks
 """
 
 import argparse
@@ -18,6 +19,14 @@ import yaml
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+
+ALL_DOMAINS = [
+    'compute', 'storage', 'database', 'networking',
+    'serverless', 'reservations', 'containers',
+    'advanced_databases', 'analytics', 'data_pipelines',
+    'storage_advanced',
+]
 
 
 def load_checks() -> dict:
@@ -32,10 +41,7 @@ def get_all_checks() -> list[dict]:
     checks_data = load_checks()
     all_checks = []
 
-    for domain in ['compute', 'storage', 'database', 'networking',
-                   'serverless', 'reservations', 'containers',
-                   'advanced_databases', 'analytics', 'data_pipelines',
-                   'storage_advanced']:
+    for domain in ALL_DOMAINS:
         if domain in checks_data:
             for check in checks_data[domain]:
                 check['domain'] = domain
@@ -161,6 +167,29 @@ def cmd_report(args):
     print(f"Report generated: {output_path}")
 
 
+def cmd_spend_hotspots(args):
+    """Generate a spend-led hotspot summary from Cost Explorer."""
+    from src.analysis.spend_hotspots import (
+        build_spend_hotspots,
+        format_spend_hotspots_markdown,
+    )
+
+    hotspot_data = build_spend_hotspots(
+        profile=args.profile,
+        top_services=args.top_services,
+        usage_limit=args.usage_limit,
+    )
+    markdown = format_spend_hotspots_markdown(hotspot_data)
+
+    if args.output:
+        output_path = Path(args.output)
+        output_path.write_text(markdown)
+        print(f"Spend hotspot report generated: {output_path}")
+        return
+
+    print(markdown)
+
+
 def cmd_init(args):
     """Initialize findings.json template."""
     template = {
@@ -183,7 +212,7 @@ def cmd_init(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='AWS Cost Optimization - 163 checks across 11 domains',
+        description='AWS Cost Optimization - 174 checks across 11 domains',
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
@@ -191,10 +220,7 @@ def main():
 
     # checks command
     checks_parser = subparsers.add_parser('checks', help='List all checks')
-    checks_parser.add_argument('--domain', choices=[
-        'compute', 'storage', 'database', 'networking',
-        'serverless', 'reservations'
-    ], help='Filter by domain')
+    checks_parser.add_argument('--domain', choices=ALL_DOMAINS, help='Filter by domain')
     checks_parser.add_argument('-v', '--verbose', action='store_true')
 
     # check command (single check detail)
@@ -210,6 +236,13 @@ def main():
     report_parser.add_argument('--findings', help='Path to findings.json')
     report_parser.add_argument('--output', '-o', help='Output path for report')
 
+    # spend-hotspots command
+    hotspots_parser = subparsers.add_parser('spend-hotspots', help='Analyze last-month spend hotspots')
+    hotspots_parser.add_argument('--profile', default='', help='AWS profile name')
+    hotspots_parser.add_argument('--top-services', type=int, default=5, help='Number of top services to inspect')
+    hotspots_parser.add_argument('--usage-limit', type=int, default=8, help='Usage types to show per service')
+    hotspots_parser.add_argument('--output', '-o', help='Optional output Markdown path')
+
     # init command
     init_parser = subparsers.add_parser('init', help='Initialize findings template')
     init_parser.add_argument('--output', '-o', help='Output path')
@@ -224,15 +257,18 @@ def main():
         cmd_scan_info(args)
     elif args.command == 'report':
         cmd_report(args)
+    elif args.command == 'spend-hotspots':
+        cmd_spend_hotspots(args)
     elif args.command == 'init':
         cmd_init(args)
     else:
         parser.print_help()
         print("\n" + "=" * 50)
         print("Quick Start:")
-        print("  python main.py checks          # List all 163 checks")
+        print("  python main.py checks          # List all 174 checks")
         print("  python main.py check EC2-001   # View specific check")
         print("  python main.py scan-info       # Show AWS CLI commands needed")
+        print("  python main.py spend-hotspots  # Rank scan focus from Cost Explorer")
         print("\nFor scanning, use Claude Code with AWS MCP to run the checks.")
 
 

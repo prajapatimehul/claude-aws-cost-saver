@@ -2,9 +2,9 @@
 
 ## Overview
 
-173 automated cost optimization checks across 11 domains.
+174 automated cost optimization checks across 11 domains.
 Integrates **AWS Compute Optimizer** (free ML-powered rightsizing/idle detection),
-**Data Transfer cost analysis** (USAGE_TYPE breakdown), and **Reservation Purchase Recommendations**.
+**Data Transfer cost analysis** (USAGE_TYPE breakdown), **Public IPv4 charge detection**, and **Reservation Purchase Recommendations**.
 Designed for use with **Claude Code + AWS MCP** for direct account scanning.
 Output: **Markdown only** (no Excel/PDF/HTML).
 
@@ -19,6 +19,9 @@ python main.py check EC2-001
 
 # See required AWS CLI commands
 python main.py scan-info
+
+# Rank the scan by actual spend before scanning all domains
+python main.py spend-hotspots --profile your-profile
 ```
 
 ## How to Scan an AWS Account
@@ -49,6 +52,16 @@ This returns actual costs including:
 - Taxes and support fees
 
 **Do NOT estimate total spend from resource counts** - it will be wrong.
+
+### Step 2.5: Build a Spend-Led Scan Order
+
+Rank the scan from Cost Explorer first:
+
+```bash
+python main.py spend-hotspots --profile your-profile
+```
+
+This highlights the top services and usage types so the scan can focus on the bill shape, not just the resource inventory.
 
 ### Step 3: Run Domain Scans
 
@@ -106,14 +119,14 @@ Then generate markdown:
 python main.py report --findings findings.json
 ```
 
-## Check Summary (173 Total)
+## Check Summary (174 Total)
 
 | Domain | Checks | Key Checks |
 |--------|--------|------------|
 | **Compute** | 27 | EC2 idle, Compute Optimizer ML rightsizing/idle, memory check, GP2→GP3, Graviton |
 | **Storage** | 24 | S3 lifecycle, EBS unattached, CloudWatch Logs, Secrets Manager, CloudTrail data events |
 | **Database** | 15 | RDS idle, over-provisioned, RI coverage |
-| **Networking** | 18 | Unused EIPs, NAT data processing, data transfer breakdown, VPC endpoints, Route 53 |
+| **Networking** | 19 | Unused EIPs, NAT data processing, data transfer breakdown, public IPv4, VPC endpoints, Route 53 |
 | **Serverless** | 10 | Lambda memory, unused functions, ARM64 |
 | **Reservations** | 12 | RI/SP coverage gaps, RI purchase recommendations, SP purchase recommendations |
 | **Containers** | 16 | ECS/EKS idle, Fargate optimization, Spot opportunity, ECR lifecycle |
@@ -146,7 +159,7 @@ claude-aws-cost-saver/
 │               ├── PRICING_REFERENCE.md
 │               └── scripts/validate_pricing.py
 ├── checks/
-│   └── all_checks.yaml          # All 163 check definitions
+│   └── all_checks.yaml          # All 174 check definitions
 ├── src/
 │   ├── outputs/markdown_report.py
 │   └── parsers/cur_parser.py

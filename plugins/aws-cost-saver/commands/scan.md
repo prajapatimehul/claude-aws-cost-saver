@@ -117,6 +117,29 @@ Store both `actual_monthly_spend` and `data_transfer_breakdown` in metadata.
 
 **Note:** If no `--profile` is provided, AWS CLI uses default credentials (env vars or IAM role).
 
+## Step 4.5: Build a Spend-Led Scan Order
+
+Do not treat all domains equally. Rank them from actual spend first.
+
+```bash
+python main.py spend-hotspots --profile {profile} --output reports/spend_hotspots_{profile}.md
+```
+
+If you need more EC2 detail and the account supports it, optionally query resource-level spend:
+
+```bash
+aws ce get-cost-and-usage-with-resources \
+  --profile {profile} \
+  --time-period Start={LAST_MONTH_START},End={LAST_MONTH_END} \
+  --granularity MONTHLY \
+  --metrics UnblendedCost \
+  --filter '{"Dimensions":{"Key":"SERVICE","Values":["Amazon Elastic Compute Cloud - Compute"]}}'
+```
+
+Optional accelerators:
+- Cost Optimization Hub: use recommendations if available, but do not fail the scan if the service is disabled or returns nothing.
+- Public IP Insights: if IPAM is enabled, use it to inventory billable public IPv4 addresses before relying only on ENI or EIP inventory.
+
 ## Step 5: Parallel Domain Scan
 
 Launch 11 `aws-cost-saver:aws-cost-saver` subagents **in parallel**:
@@ -126,7 +149,7 @@ Launch 11 `aws-cost-saver:aws-cost-saver` subagents **in parallel**:
 | 1 | compute | EC2, EBS, AMIs, snapshots, EIPs, Compute Optimizer |
 | 2 | storage | S3, EFS, CloudWatch Logs, CloudTrail, Secrets Manager |
 | 3 | database | RDS, DynamoDB, ElastiCache |
-| 4 | networking | NAT, ELB, VPC endpoints, data transfer, Route 53 |
+| 4 | networking | NAT, ELB, VPC endpoints, public IPv4, data transfer, Route 53 |
 | 5 | serverless | Lambda, API Gateway, SQS, Step Functions |
 | 6 | reservations | RI coverage, Savings Plans, purchase recommendations |
 | 7 | containers | ECS, EKS, Fargate, ECR |
@@ -141,6 +164,7 @@ Pass to each:
 - `profile`: AWS profile name
 - `compute_optimizer_active`: Whether CO is enrolled (for compute domain)
 - `data_transfer_breakdown`: USAGE_TYPE costs (for networking domain)
+- `spend_hotspots`: Top services and usage types from Step 4.5
 
 ## Step 6: Merge, Anti-Hallucination Check & Quick Review
 
@@ -226,7 +250,8 @@ Each finding type has a SPECIFIC formula:
 | Idle EC2 | `hourly_rate × 730` |
 | Over-provisioned | `current_cost - recommended_cost` |
 | No RI Coverage | `on_demand_cost × savings_percent` |
-| Idle EKS Cluster | `$72/mo + node_costs` |
+| Public IPv4 Charges | `address_count × $0.005 × 730` |
+| Idle EKS Cluster | `(cluster_hourly_rate × 730) + node_costs` |
 | Idle Fargate Task | `vCPU_hrs × $0.04048 + GB_hrs × $0.004445` |
 | Idle Aurora | `hourly_rate × 730 + storage_gb × $0.10` |
 | Idle Redshift | `node_hourly × nodes × 730` |
@@ -237,6 +262,7 @@ Each finding type has a SPECIFIC formula:
 | Cross-AZ Transfer | `gb_transferred × $0.02` (both directions) |
 | Unused Secrets | `count × $0.40` |
 | Unused Route 53 Zone | `count × $0.50` |
+| EBS Snapshot Archive | `gb_months × ($0.05 - $0.0125)` |
 | RI Purchase Savings | From `ce get-reservation-purchase-recommendation` |
 | SP Purchase Savings | From `ce get-savings-plans-purchase-recommendation` |
 

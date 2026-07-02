@@ -11,7 +11,7 @@
   "plugins": [
     {
       "name": "aws-cost-saver",
-      "description": "173 AWS cost checks with Compute Optimizer ML integration, data transfer analysis, and reservation purchase recommendations",
+      "description": "174 AWS cost checks with Compute Optimizer ML integration, data transfer analysis, and reservation purchase recommendations",
       "version": "2.0.0",
       "author": {
         "name": "Mehul Prajapati"

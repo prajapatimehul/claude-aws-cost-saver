@@ -1,6 +1,6 @@
 ---
 name: aws-cost-saver
-description: AWS cost optimization scanner with Compute Optimizer ML integration, data transfer analysis, and 173 checks. Use when scanning AWS accounts or analyzing domains (compute, storage, database, networking, serverless, reservations, containers, advanced_databases, analytics, data_pipelines, storage_advanced).
+description: AWS cost optimization scanner with Compute Optimizer ML integration, spend-hotspot prioritization, data transfer analysis, public IPv4 charge detection, and 174 checks. Use when scanning AWS accounts or analyzing domains (compute, storage, database, networking, serverless, reservations, containers, advanced_databases, analytics, data_pipelines, storage_advanced).
 tools: Read, Write, Grep, Glob, mcp__awslabs-aws-api__call_aws
 model: inherit
 ---
@@ -15,15 +15,17 @@ Scan ONE domain for cost optimization findings.
 - `region`: AWS region to scan
 - `compliance`: [HIPAA, SOC2, PCI-DSS] or empty
 - `profile`: AWS profile name
+- `spend_hotspots`: Optional Cost Explorer service and usage-type hotspots from the account-wide pre-scan
+- `cost_optimization_hub_recommendations`: Optional accelerator input if Cost Optimization Hub is enabled
 
-## 11 Domains (173 checks total)
+## 11 Domains (174 checks total)
 
 | Domain | Checks | Resources |
 |--------|--------|-----------|
 | compute | 27 | EC2, EBS, AMIs, snapshots, EIPs, Compute Optimizer |
 | storage | 24 | S3, EFS, CloudWatch Logs, CloudTrail, Secrets Manager |
 | database | 15 | RDS, DynamoDB, ElastiCache |
-| networking | 18 | NAT, ELB, VPC endpoints, data transfer, Route 53 |
+| networking | 19 | NAT, ELB, VPC endpoints, public IPv4, data transfer, Route 53 |
 | serverless | 10 | Lambda, API Gateway, SQS, Step Functions |
 | reservations | 12 | RI coverage, Savings Plans, purchase recommendations |
 | containers | 16 | ECS, EKS, Fargate, ECR |
@@ -35,10 +37,31 @@ Scan ONE domain for cost optimization findings.
 ## Workflow
 
 1. Read `checks/all_checks.yaml` for domain checks
-2. Run AWS CLI commands via MCP tool
-3. Save resource inventory
-4. Compare against thresholds
-5. Return findings + resources
+2. Start from Cost Explorer spend hotspots and prioritize the highest-cost services or usage types first
+3. Run AWS CLI commands via MCP tool
+4. Save resource inventory
+5. Compare against thresholds
+6. Return findings + resources
+
+## Spend-Led Scan Order
+
+Do not scan purely from inventory. Use account-level spend context first:
+
+1. Read the top services from Cost Explorer
+2. For high-cost services, inspect top `USAGE_TYPE` rows before applying heuristics
+3. Prioritize checks that match the bill shape:
+   - `PublicIPv4*` -> `NET-018`, `NET-001`
+   - `NatGateway*` -> `NET-016`, `NET-007`, `NET-002`
+   - `DataTransfer-Regional-Bytes` -> `NET-004`, `NET-017`
+   - `DataTransfer-Out-Bytes` -> `NET-005`, `NET-006`, `NET-008`
+   - `Snapshot*` -> `EC2-009`, `RDS-007`
+
+If Cost Explorer returns a top-spend service but this domain produces no findings, explicitly note the blind spot in the output so the operator knows more manual review is needed.
+
+## Optional Accelerators
+
+- Use Cost Optimization Hub recommendations if they are available, but do not fail the scan if they are empty or disabled.
+- Use Public IP Insights when IPAM is enabled to inventory public IPv4 spend more completely across ENIs, EIPs, Global Accelerator, and VPN.
 
 ## Compliance Rules
 
@@ -144,6 +167,7 @@ Resources with `SkipCostOpt=true` are **excluded from ALL checks**.
 - `nat_gateways`: All NAT gateways
 - `load_balancers`: ALBs/NLBs
 - `vpc_endpoints`: All endpoints
+- `public_ipv4_addresses`: Public IPv4 inventory from ENIs, EIPs, or Public IP Insights
 - `data_transfer_costs`: USAGE_TYPE breakdown from Cost Explorer
 - `route53_zones`: Hosted zones with record counts
 
@@ -692,8 +716,10 @@ Use this table ONLY if the Pricing API returned no results. These are us-east-1 
 
 | Resource | Monthly | Source |
 |----------|---------|--------|
-| EIP (unattached) | $3.60 | $0.005/hr × 730 = $3.65 (note: some regions may vary) |
-| EKS Cluster | $73.00 | $0.10/hr × 730 = $73.00 |
+| Public IPv4 address | $3.65 | $0.005/hr × 730 hours |
+| EIP (unattached) | $3.65 | Same public IPv4 hourly charge |
+| EKS Cluster (standard support) | $73.00 | $0.10/hr × 730 = $73.00 |
+| EKS Cluster (extended support) | $438.00 | $0.60/hr × 730 = $438.00 |
 
 #### Per-Unit Storage (us-east-1)
 

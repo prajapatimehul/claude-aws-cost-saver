@@ -1,7 +1,7 @@
 {
   "name": "aws-cost-saver",
   "version": "2.0.0",
-  "description": "173 AWS cost optimization checks with Compute Optimizer ML integration, data transfer analysis, and reservation purchase recommendations.",
+  "description": "174 AWS cost optimization checks with Compute Optimizer ML integration, data transfer analysis, and reservation purchase recommendations.",
   "author": {
     "name": "Mehul Prajapati",
     "url": "https://github.com/prajapatimehul"
@@ -26,7 +26,7 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "AWS Cost Saver",
-    "shortDescription": "Find AWS waste with 173 read-only cost checks.",
+    "shortDescription": "Find AWS waste with 174 read-only cost checks.",
     "longDescription": "Scans an AWS account across 11 domains (compute, storage, database, networking, serverless, reservations, containers, advanced databases, analytics, data pipelines, storage-advanced) using Compute Optimizer ML rightsizing, Cost Explorer USAGE_TYPE breakdown, and Reservation/Savings Plan purchase recommendations. Read-only by design — never modifies or deletes resources. Every finding is priced from the AWS Pricing API or a verified table (never guessed).",
     "defaultPrompt": [
       "Scan my AWS account for cost savings.",
