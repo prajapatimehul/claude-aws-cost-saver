@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/prajapatimehul/claude-aws-cost-saver/pulls)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Plugin-5C4EE5)](https://code.claude.com)
-[![Plugin Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/prajapatimehul/claude-aws-cost-saver)
+[![Plugin Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/prajapatimehul/claude-aws-cost-saver)
 
 Find what's wasting money in your AWS account.
 
@@ -48,7 +48,7 @@ Or just ask: `Scan my AWS account for cost savings`
 
 **Requirements:** AWS credentials configured (`aws configure` or SSO), `uv` installed.
 
-**This tool only reads data — it never modifies or deletes anything.** A PreToolUse hook blocks any MCP call containing write verbs (`delete`, `terminate`, `stop`, `create-`, `modify`, …).
+**This tool only reads data — it never modifies or deletes anything.** A PreToolUse hook enforces a read-only allowlist: only `describe-`/`get-`/`list-`/`lookup-`/`search-` style AWS CLI operations are permitted, and everything else is denied by default.
 
 ## Features
 
@@ -79,7 +79,7 @@ Or just ask: `Scan my AWS account for cost savings`
 
 ### MCP server
 
-The plugin pre-wires the **AWS API MCP server** (`mcp__awslabs-aws-api__call_aws`) in [`.mcp.json`](plugins/aws-cost-saver/.mcp.json), launched via `uvx` from `scripts/start-mcp.sh`. A PreToolUse hook in [`hooks.json`](plugins/aws-cost-saver/hooks.json) blocks any write/mutation command, keeping every scan read-only.
+The plugin pre-wires the **AWS API MCP server** in [`.mcp.json`](plugins/aws-cost-saver/.mcp.json), launched via `uvx` from `scripts/start-mcp.sh`. A PreToolUse hook in [`hooks/hooks.json`](plugins/aws-cost-saver/hooks/hooks.json) (backed by [`scripts/guard_readonly.py`](plugins/aws-cost-saver/scripts/guard_readonly.py)) denies every non-read AWS CLI operation, keeping every scan read-only by default.
 
 ### CLI
 

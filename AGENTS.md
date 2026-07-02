@@ -27,7 +27,7 @@ Requirements:
 
 ## Codex Operating Rules
 
-- Use `checks/all_checks.yaml` as the baseline catalog of checks.
+- Use `plugins/aws-cost-saver/checks/all_checks.yaml` as the baseline catalog of checks.
 - Always query AWS Cost Explorer first for actual spend before estimating savings.
 - Treat Cost Optimization Hub and Compute Optimizer as optional accelerators, not prerequisites.
 - Do not fail the scan if optional recommendation sources are disabled or empty.
@@ -47,7 +47,7 @@ Requirements:
 
 ```text
 Scan my AWS account for cost savings using AWS MCP.
-Use checks/all_checks.yaml as the baseline.
+Use plugins/aws-cost-saver/checks/all_checks.yaml as the baseline.
 Get actual monthly spend from Cost Explorer first.
 Treat Cost Optimization Hub and Compute Optimizer as optional.
 Return Markdown only and save merged findings to findings.json.

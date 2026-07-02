@@ -16,6 +16,7 @@ Usage:
 import json
 import sys
 import argparse
+import shlex
 import subprocess
 import re
 from datetime import datetime, timezone
@@ -53,13 +54,12 @@ PROD_PATTERNS = re.compile(r'(prod|production|live|prd)', re.IGNORECASE)
 
 def run_aws_command(command: str, profile: str) -> dict | None:
     """Execute AWS CLI command and return JSON response."""
-    full_command = f"{command} --output json"
+    args = shlex.split(command) + ["--output", "json"]
     if profile:
-        full_command += f" --profile {profile}"
+        args += ["--profile", profile]
     try:
         result = subprocess.run(
-            full_command,
-            shell=True,
+            args,
             capture_output=True,
             text=True,
             timeout=30
@@ -67,7 +67,7 @@ def run_aws_command(command: str, profile: str) -> dict | None:
         if result.returncode == 0 and result.stdout.strip():
             return json.loads(result.stdout)
         return None
-    except (subprocess.TimeoutExpired, json.JSONDecodeError):
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, ValueError, OSError):
         return None
 
 
@@ -166,7 +166,7 @@ def check_resource_age(details: dict) -> int:
         return -1
 
 
-def analyze_finding(finding: dict, profile: str) -> dict:
+def analyze_finding(finding: dict, profile: str, threshold: int = 50) -> dict:
     """Analyze a single finding and calculate confidence adjustments."""
     check_id = finding.get("check_id", "")
     resource_id = finding.get("resource_id", "")
@@ -258,12 +258,12 @@ def analyze_finding(finding: dict, profile: str) -> dict:
     # Clamp confidence to 0-100
     confidence = max(0, min(100, confidence))
 
-    # Determine action based on final confidence
-    if confidence >= 80:
+    # Determine action based on final confidence.
+    # Single scheme used across the whole project (CLAUDE.md, scan.md):
+    #   >=70 approved, threshold..69 needs_validation, <threshold filtered
+    if confidence >= 70:
         action = "approved"
-    elif confidence >= 60:
-        action = "approved_with_review"
-    elif confidence >= 50:
+    elif confidence >= threshold:
         action = "needs_validation"
     else:
         action = "filtered"
@@ -313,7 +313,6 @@ def review_findings(findings_path: str, profile: str, threshold: int = 50, force
     # Statistics
     stats = {
         "approved": 0,
-        "approved_with_review": 0,
         "needs_validation": 0,
         "filtered": 0
     }
@@ -324,7 +323,8 @@ def review_findings(findings_path: str, profile: str, threshold: int = 50, force
         # Skip already reviewed unless forced
         if finding.get("review_status") and not force:
             reviewed_findings.append(finding)
-            stats[finding["review_status"]["action"]] += 1
+            action = finding["review_status"].get("action", "needs_validation")
+            stats[action] = stats.get(action, 0) + 1
             continue
 
         # Clear previous review status if force re-reviewing
@@ -332,7 +332,7 @@ def review_findings(findings_path: str, profile: str, threshold: int = 50, force
             del finding["review_status"]
 
         # Analyze finding
-        analysis = analyze_finding(finding, profile)
+        analysis = analyze_finding(finding, profile, threshold)
 
         # Add review status
         finding["review_status"] = {
@@ -345,7 +345,7 @@ def review_findings(findings_path: str, profile: str, threshold: int = 50, force
             "notes": "; ".join(analysis["notes"]) if analysis["notes"] else "No adjustments"
         }
 
-        stats[analysis["action"]] += 1
+        stats[analysis["action"]] = stats.get(analysis["action"], 0) + 1
         reviewed_findings.append(finding)
 
     # Update findings
@@ -359,7 +359,6 @@ def review_findings(findings_path: str, profile: str, threshold: int = 50, force
         "reviewed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "total_findings": len(findings),
         "approved": stats["approved"],
-        "approved_with_review": stats["approved_with_review"],
         "needs_validation": stats["needs_validation"],
         "filtered": stats["filtered"],
         "filter_threshold": threshold
@@ -369,7 +368,7 @@ def review_findings(findings_path: str, profile: str, threshold: int = 50, force
     approved_savings = sum(
         f.get("monthly_savings", 0)
         for f in reviewed_findings
-        if f.get("review_status", {}).get("action") in ["approved", "approved_with_review"]
+        if f.get("review_status", {}).get("action") == "approved"
     )
     data["metadata"]["approved_monthly_savings"] = round(approved_savings, 2)
 
@@ -382,10 +381,9 @@ def review_findings(findings_path: str, profile: str, threshold: int = 50, force
     print("REVIEW SUMMARY")
     print("=" * 60)
     print(f"\nTotal Findings: {len(findings)}")
-    print(f"\n✓ Approved (≥80%):              {stats['approved']}")
-    print(f"✓ Approved with Review (60-79%): {stats['approved_with_review']}")
-    print(f"⚠ Needs Validation (50-59%):     {stats['needs_validation']}")
-    print(f"✗ Filtered (<50%):               {stats['filtered']}")
+    print(f"\n✓ Approved (≥70%):              {stats['approved']}")
+    print(f"⚠ Needs Validation ({threshold}-69%):    {stats['needs_validation']}")
+    print(f"✗ Filtered (<{threshold}%):              {stats['filtered']}")
     print(f"\nApproved Monthly Savings: ${approved_savings:,.2f}")
     print(f"\nUpdated: {findings_path}")
 
@@ -418,7 +416,7 @@ def main():
     parser = argparse.ArgumentParser(description="Review AWS cost optimization findings")
     parser.add_argument("findings_file", help="Path to findings.json")
     parser.add_argument("--profile", default="", help="AWS profile name")
-    parser.add_argument("--threshold", type=int, default=50, help="Confidence threshold (default: 50)")
+    parser.add_argument("--threshold", type=int, default=50, help="Confidence below this is filtered out; 70+ is always approved (default: 50)")
     parser.add_argument("--force", action="store_true", help="Re-review already reviewed findings")
 
     args = parser.parse_args()

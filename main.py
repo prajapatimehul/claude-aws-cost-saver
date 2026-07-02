@@ -30,8 +30,10 @@ ALL_DOMAINS = [
 
 
 def load_checks() -> dict:
-    """Load all check definitions from YAML."""
-    checks_path = Path(__file__).parent / 'checks' / 'all_checks.yaml'
+    """Load all check definitions from YAML (bundled inside the plugin)."""
+    checks_path = (
+        Path(__file__).parent / 'plugins' / 'aws-cost-saver' / 'checks' / 'all_checks.yaml'
+    )
     with open(checks_path) as f:
         return yaml.safe_load(f)
 

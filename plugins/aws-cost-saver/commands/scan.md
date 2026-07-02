@@ -1,13 +1,15 @@
 ---
 description: Scan AWS account for cost optimization
-allowed-tools: Read, Task, Write, Bash, Glob, Grep, AskUserQuestion, mcp__awslabs-aws-api__call_aws
+argument-hint: "[aws-profile]"
+allowed-tools: Read, Task, Write, Bash, Glob, Grep, AskUserQuestion, mcp__plugin_aws-cost-saver_awslabs-aws-api__call_aws, mcp__awslabs-aws-api__call_aws
 ---
 
 # AWS Cost Optimization Scan
 
 ## Step 0: Ask for AWS Profile
 
-First, ask the user which AWS profile to use:
+If a profile name was passed as an argument (`$ARGUMENTS`), use it and skip the question.
+Otherwise, ask the user which AWS profile to use:
 
 ```json
 {
@@ -121,9 +123,18 @@ Store both `actual_monthly_spend` and `data_transfer_breakdown` in metadata.
 
 Do not treat all domains equally. Rank them from actual spend first.
 
+If you are working inside a checkout of this repository (`main.py` exists in the
+project root), run:
+
 ```bash
 python main.py spend-hotspots --profile {profile} --output reports/spend_hotspots_{profile}.md
 ```
+
+Otherwise (marketplace install — `main.py` is not shipped with the plugin), build
+the same ranking directly from the Step 4 Cost Explorer output: order services by
+spend, then for each of the top 5 services query `USAGE_TYPE` breakdown (the same
+`aws ce get-cost-and-usage` call with a SERVICE filter) and map dominant usage
+types to check IDs using the Spend-Led Scan Order table in the subagent prompt.
 
 If you need more EC2 detail and the account supports it, optionally query resource-level spend:
 

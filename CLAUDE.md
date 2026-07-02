@@ -65,7 +65,7 @@ This highlights the top services and usage types so the scan can focus on the bi
 
 ### Step 3: Run Domain Scans
 
-For each domain, run the AWS CLI commands listed in `checks/all_checks.yaml`.
+For each domain, run the AWS CLI commands listed in `plugins/aws-cost-saver/checks/all_checks.yaml`.
 
 Example for Compute domain:
 ```
@@ -140,32 +140,44 @@ python main.py report --findings findings.json
 ```
 claude-aws-cost-saver/
 ├── .claude-plugin/
-│   └── marketplace.json         # Plugin marketplace definition
+│   └── marketplace.json         # Plugin marketplace definition (Claude Code)
+├── .agents/
+│   └── plugins/marketplace.json # Plugin marketplace definition (Codex)
 ├── plugins/
-│   └── aws-cost-saver/        # The plugin
-│       ├── plugin.json          # Plugin metadata
+│   └── aws-cost-saver/          # The plugin (everything a marketplace install ships)
+│       ├── .claude-plugin/
+│       │   └── plugin.json      # Plugin manifest (Claude Code)
+│       ├── .codex-plugin/
+│       │   └── plugin.json      # Plugin manifest (Codex)
 │       ├── .mcp.json            # MCP server configuration (AWS API)
 │       ├── agents/
 │       │   └── aws-cost-saver.md
 │       ├── commands/
 │       │   └── scan.md
+│       ├── checks/
+│       │   └── all_checks.yaml  # All 174 check definitions
+│       ├── hooks/
+│       │   └── hooks.json       # PreToolUse read-only guard
+│       ├── scripts/
+│       │   ├── start-mcp.sh     # Launches the AWS API MCP server via uvx
+│       │   └── guard_readonly.py # Denies non-read AWS CLI operations
 │       └── skills/
 │           ├── reviewing-findings/
-│           │   ├── reviewing-findings.md
+│           │   ├── SKILL.md
 │           │   ├── REVIEW_CRITERIA.md
 │           │   └── scripts/review_findings.py
 │           └── validating-aws-pricing/
-│               ├── validating-aws-pricing.md
+│               ├── SKILL.md
 │               ├── PRICING_REFERENCE.md
 │               └── scripts/validate_pricing.py
-├── checks/
-│   └── all_checks.yaml          # All 174 check definitions
 ├── src/
+│   ├── analysis/spend_hotspots.py
 │   ├── outputs/markdown_report.py
 │   └── parsers/cur_parser.py
 ├── CLAUDE.md                    # This file
 ├── README.md                    # Documentation
-├── main.py                      # CLI (checks, report)
+├── AGENTS.md                    # Codex setup guide
+├── main.py                      # CLI (checks, report, spend-hotspots)
 ├── findings.json                # Scan results (generated)
 └── resources.json               # Resource inventory (generated)
 ```
@@ -175,7 +187,7 @@ claude-aws-cost-saver/
 A specialized subagent for scanning AWS accounts. Located at `plugins/aws-cost-saver/agents/aws-cost-saver.md`.
 
 ### Features
-- Reads check definitions from `checks/all_checks.yaml`
+- Reads check definitions from `plugins/aws-cost-saver/checks/all_checks.yaml`
 - Executes AWS CLI commands via MCP tool
 - **Saves raw resource inventory** from AWS API responses
 - Analyzes results against thresholds
@@ -221,7 +233,7 @@ Claude Code will invoke the Task tool 11 times in parallel:
 # Internal invocation (automatic)
 Task(
     subagent_type="aws-cost-saver:aws-cost-saver",
-    prompt="Scan the compute domain in us-east-1. Read checks from checks/all_checks.yaml...",
+    prompt="Scan the compute domain in us-east-1. Read checks from plugins/aws-cost-saver/checks/all_checks.yaml...",
 )
 # ... repeated for each domain
 ```

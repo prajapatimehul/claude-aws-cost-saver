@@ -8,6 +8,7 @@ the scan on the services and usage types that are actually driving spend.
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 from datetime import datetime, timedelta, timezone
 
@@ -69,19 +70,18 @@ USAGE_TYPE_PLAYBOOK = [
 
 def run_aws_command(command: str, profile: str) -> dict | None:
     """Execute an AWS CLI command and return parsed JSON."""
-    full_command = f"{command} --output json"
+    args = shlex.split(command) + ["--output", "json"]
     if profile:
-        full_command += f" --profile {profile}"
+        args += ["--profile", profile]
 
     try:
         result = subprocess.run(
-            full_command,
-            shell=True,
+            args,
             capture_output=True,
             text=True,
             timeout=60,
         )
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, ValueError, OSError):
         return None
 
     if result.returncode != 0 or not result.stdout.strip():

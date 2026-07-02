@@ -1,7 +1,7 @@
 ---
 name: aws-cost-saver
 description: AWS cost optimization scanner with Compute Optimizer ML integration, spend-hotspot prioritization, data transfer analysis, public IPv4 charge detection, and 174 checks. Use when scanning AWS accounts or analyzing domains (compute, storage, database, networking, serverless, reservations, containers, advanced_databases, analytics, data_pipelines, storage_advanced).
-tools: Read, Write, Grep, Glob, mcp__awslabs-aws-api__call_aws
+tools: Read, Write, Grep, Glob, mcp__plugin_aws-cost-saver_awslabs-aws-api__call_aws, mcp__awslabs-aws-api__call_aws
 model: inherit
 ---
 
@@ -36,7 +36,9 @@ Scan ONE domain for cost optimization findings.
 
 ## Workflow
 
-1. Read `checks/all_checks.yaml` for domain checks
+1. Read the check definitions for your domain from `${CLAUDE_PLUGIN_ROOT}/checks/all_checks.yaml`.
+   If that variable is not expanded in your prompt, locate the file with Glob
+   (`**/aws-cost-saver/checks/all_checks.yaml`) — it is bundled with this plugin.
 2. Start from Cost Explorer spend hotspots and prioritize the highest-cost services or usage types first
 3. Run AWS CLI commands via MCP tool
 4. Save resource inventory

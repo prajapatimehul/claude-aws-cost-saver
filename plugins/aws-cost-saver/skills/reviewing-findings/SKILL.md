@@ -8,6 +8,7 @@ allowed-tools:
   - Grep
   - Glob
   - Task
+  - mcp__plugin_aws-cost-saver_awslabs-aws-api__call_aws
   - mcp__awslabs-aws-api__call_aws
 ---
 
@@ -18,12 +19,15 @@ Multi-perspective review of cost optimization findings with confidence-based fil
 ## Quick Start
 
 ```bash
-# Review findings (outputs to terminal)
-/reviewing-findings
+# Review findings and update findings.json in place
+python3 "${CLAUDE_SKILL_DIR}/scripts/review_findings.py" findings.json --profile your-profile
 
-# Review and update findings.json
-/reviewing-findings --update
+# Re-review findings that already carry a review_status
+python3 "${CLAUDE_SKILL_DIR}/scripts/review_findings.py" findings.json --force
 ```
+
+For the detailed per-check confidence matrices and false-positive patterns, read
+[REVIEW_CRITERIA.md](REVIEW_CRITERIA.md) in this skill's directory.
 
 ## Review Process
 
@@ -136,7 +140,7 @@ Add review metadata to each finding:
 - Has snapshot → lower urgency
 - Size > 500GB → verify with owner
 
-### Reserved Instance Coverage (RDS-005, EC2-RI-001)
+### Reserved Instance Coverage (RDS-005, RI-001)
 
 **Verify:**
 - [ ] Workload is steady (not variable)

@@ -13,6 +13,7 @@ Usage:
 
 import argparse
 import json
+import shlex
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -45,7 +46,12 @@ VERIFIED_PRICING = {
     "us-east-1": {
         "ebs:gp3": 0.08,
         "ebs:gp2": 0.10,
+        "ebs:io1": 0.125,
+        "ebs:io1_iops": 0.065,
         "ebs:io2": 0.125,
+        "ebs:io2_iops_tier1": 0.065,   # first 32,000 provisioned IOPS
+        "ebs:io2_iops_tier2": 0.046,   # 32,001 - 64,000
+        "ebs:io2_iops_tier3": 0.032,   # above 64,000
         "ebs:snapshot_standard": 0.05,
         "ebs:snapshot_archive": 0.0125,
         "cloudwatch:logs-storage": 0.03,
@@ -154,14 +160,13 @@ DOMAIN_TO_CE_SERVICE = {
 
 def run_aws_command(command: str, profile: str) -> dict | None:
     """Execute AWS CLI command and return JSON response."""
-    full_command = f"{command} --output json"
+    args = shlex.split(command) + ["--output", "json"]
     if profile:
-        full_command += f" --profile {profile}"
+        args += ["--profile", profile]
 
     try:
         result = subprocess.run(
-            full_command,
-            shell=True,
+            args,
             capture_output=True,
             text=True,
             timeout=30
@@ -169,7 +174,7 @@ def run_aws_command(command: str, profile: str) -> dict | None:
         if result.returncode == 0 and result.stdout.strip():
             return json.loads(result.stdout)
         return None
-    except (subprocess.TimeoutExpired, json.JSONDecodeError):
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, ValueError, OSError):
         return None
 
 
@@ -214,7 +219,40 @@ def existing_pricing_is_valid(finding: dict) -> bool:
     return bool(details.get("calculation"))
 
 
-def query_ec2_pricing(instance_type: str, profile: str, region: str = "us-east-1") -> float | None:
+# Map finding platform metadata to Pricing API operatingSystem values.
+# Rule 12 (Windows != Linux): never assume Linux for an unknown platform.
+PLATFORM_TO_PRICING_OS = {
+    "linux": "Linux",
+    "linux/unix": "Linux",
+    "windows": "Windows",
+    "rhel": "RHEL",
+    "red hat enterprise linux": "RHEL",
+    "suse": "SUSE",
+    "ubuntu pro": "Ubuntu Pro",
+}
+
+
+def resolve_operating_system(details: dict) -> str | None:
+    """Resolve the Pricing API operatingSystem from finding details."""
+    platform = (
+        details.get("platform")
+        or details.get("operating_system")
+        or details.get("os")
+        or ""
+    )
+    if not platform:
+        # EC2 DescribeInstances omits Platform for Linux; platform_details is
+        # authoritative when the scanner recorded it.
+        platform = details.get("platform_details") or "linux/unix"
+    return PLATFORM_TO_PRICING_OS.get(str(platform).strip().lower())
+
+
+def query_ec2_pricing(
+    instance_type: str,
+    profile: str,
+    region: str = "us-east-1",
+    operating_system: str = "Linux",
+) -> float | None:
     """Query AWS Pricing API for EC2 instance hourly rate."""
     # Map region code to location name
     location_map = {
@@ -236,7 +274,7 @@ def query_ec2_pricing(instance_type: str, profile: str, region: str = "us-east-1
         --filters \
         "Type=TERM_MATCH,Field=instanceType,Value={instance_type}" \
         "Type=TERM_MATCH,Field=location,Value={location}" \
-        "Type=TERM_MATCH,Field=operatingSystem,Value=Linux" \
+        "Type=TERM_MATCH,Field=operatingSystem,Value={operating_system}" \
         "Type=TERM_MATCH,Field=tenancy,Value=Shared" \
         "Type=TERM_MATCH,Field=preInstalledSw,Value=NA" \
         "Type=TERM_MATCH,Field=capacitystatus,Value=Used" \
@@ -246,7 +284,13 @@ def query_ec2_pricing(instance_type: str, profile: str, region: str = "us-east-1
     return parse_pricing_response(result)
 
 
-def query_rds_pricing(instance_type: str, engine: str, profile: str, region: str = "us-east-1") -> float | None:
+def query_rds_pricing(
+    instance_type: str,
+    engine: str,
+    profile: str,
+    region: str = "us-east-1",
+    deployment_option: str = "Single-AZ",
+) -> float | None:
     """Query AWS Pricing API for RDS instance hourly rate."""
     location_map = {
         "us-east-1": "US East (N. Virginia)",
@@ -278,7 +322,7 @@ def query_rds_pricing(instance_type: str, engine: str, profile: str, region: str
         "Type=TERM_MATCH,Field=instanceType,Value={instance_type}" \
         "Type=TERM_MATCH,Field=location,Value={location}" \
         "Type=TERM_MATCH,Field=databaseEngine,Value={db_engine}" \
-        "Type=TERM_MATCH,Field=deploymentOption,Value=Single-AZ" \
+        "Type=TERM_MATCH,Field=deploymentOption,Value={deployment_option}" \
         --max-results 1'''
 
     result = run_aws_command(cmd, profile)
@@ -396,22 +440,29 @@ def sanity_check_finding(finding: dict, profile: str, service_spend_cache: dict)
 
     service_spend = service_spend_cache.get(service_domain)
 
-    # SANITY CHECK: savings cannot exceed service spend
-    if service_spend is not None and monthly_savings > service_spend:
+    # SANITY CHECK: savings cannot exceed service spend.
+    # Per Rule 8 this is a red flag, not an auto-correction: the cap is applied
+    # so totals stay sane, but the finding is flagged for manual verification
+    # (resource count, aggregation window) instead of silently trusted.
+    if service_spend is not None and service_spend > 0 and monthly_savings > service_spend:
         original_savings = monthly_savings
         capped_savings = round(service_spend, 2)
 
         finding["monthly_savings"] = capped_savings
         finding["pricing_corrected"] = True
+        finding["requires_manual_validation"] = True
         details = ensure_details(finding)
         details["pricing_corrected"] = True
         finding["sanity_check"] = {
             "original_savings": original_savings,
             "service_spend": round(service_spend, 2),
             "capped_to": capped_savings,
-            "reason": f"Savings ${original_savings:.2f} exceeded service spend ${service_spend:.2f}"
+            "reason": (
+                f"Savings ${original_savings:.2f} exceeded service spend ${service_spend:.2f}. "
+                "Verify the resource count and pricing formula manually before acting."
+            ),
         }
-        print(f"  ⚠️  {check_id}: Capped ${original_savings:.2f} -> ${capped_savings:.2f} (service spend: ${service_spend:.2f})")
+        print(f"  ⚠️  {check_id}: Capped ${original_savings:.2f} -> ${capped_savings:.2f} (service spend: ${service_spend:.2f}) - flagged for manual validation")
 
     return finding
 
@@ -439,12 +490,48 @@ def calculate_ebs_storage_cost(details: dict, region: str) -> tuple[float | None
             "throughput_above_baseline": throughput,
         }
 
-    if volume_type in {"gp2", "io2"}:
-        price_per_gb = get_verified_price(f"ebs:{volume_type}", region)
+    if volume_type == "gp2":
+        price_per_gb = get_verified_price("ebs:gp2", region)
         if price_per_gb is None:
             return None, {}
         return round(float(size_gb) * price_per_gb, 2), {
             "price_per_gb": price_per_gb,
+        }
+
+    # Rule 10: io1/io2 cost is storage + provisioned IOPS. Pricing the storage
+    # alone produces the "$12 instead of $1,052" error, so refuse without IOPS.
+    if volume_type == "io1":
+        price_per_gb = get_verified_price("ebs:io1", region)
+        iops_rate = get_verified_price("ebs:io1_iops", region)
+        iops = details.get("iops") or details.get("provisioned_iops")
+        if price_per_gb is None or iops_rate is None or not iops:
+            return None, {}
+        monthly_cost = (float(size_gb) * price_per_gb) + (float(iops) * iops_rate)
+        return round(monthly_cost, 2), {
+            "price_per_gb": price_per_gb,
+            "provisioned_iops": iops,
+            "iops_rate": iops_rate,
+        }
+
+    if volume_type == "io2":
+        price_per_gb = get_verified_price("ebs:io2", region)
+        tier1 = get_verified_price("ebs:io2_iops_tier1", region)
+        tier2 = get_verified_price("ebs:io2_iops_tier2", region)
+        tier3 = get_verified_price("ebs:io2_iops_tier3", region)
+        iops = details.get("iops") or details.get("provisioned_iops")
+        if None in (price_per_gb, tier1, tier2, tier3) or not iops:
+            return None, {}
+        iops = float(iops)
+        iops_cost = (
+            min(iops, 32000) * tier1
+            + max(0.0, min(iops, 64000) - 32000) * tier2
+            + max(0.0, iops - 64000) * tier3
+        )
+        monthly_cost = (float(size_gb) * price_per_gb) + iops_cost
+        return round(monthly_cost, 2), {
+            "price_per_gb": price_per_gb,
+            "provisioned_iops": iops,
+            "iops_cost": round(iops_cost, 2),
         }
 
     return None, {}
@@ -466,8 +553,15 @@ def calculate_ec2_savings(finding: dict, profile: str, use_api: bool = False) ->
     if not use_api or not instance_type or not region:
         return pricing_unknown("EC2 pricing requires AWS Pricing API with instance_type and region.")
 
-    print(f"  Querying EC2 pricing for {instance_type}...")
-    current_rate = query_ec2_pricing(instance_type, profile, region)
+    operating_system = resolve_operating_system(details)
+    if operating_system is None:
+        return pricing_unknown(
+            "Unrecognized platform - refusing to assume Linux pricing (Rule 12).",
+            platform=details.get("platform") or details.get("platform_details"),
+        )
+
+    print(f"  Querying EC2 pricing for {instance_type} ({operating_system})...")
+    current_rate = query_ec2_pricing(instance_type, profile, region, operating_system)
     if current_rate is None:
         return pricing_unknown("AWS Pricing API did not return EC2 pricing.", instance_type=instance_type, region=region)
 
@@ -485,7 +579,7 @@ def calculate_ec2_savings(finding: dict, profile: str, use_api: bool = False) ->
         return pricing_unknown("No exact recommended_instance_type was supplied for EC2 rightsizing.")
 
     print(f"  Querying EC2 pricing for recommended target {recommended_instance_type}...")
-    recommended_rate = query_ec2_pricing(recommended_instance_type, profile, region)
+    recommended_rate = query_ec2_pricing(recommended_instance_type, profile, region, operating_system)
     if recommended_rate is None:
         return pricing_unknown(
             "AWS Pricing API did not return pricing for the recommended EC2 target.",
@@ -608,8 +702,15 @@ def calculate_rds_savings(finding: dict, profile: str, use_api: bool = False) ->
     if not use_api or not instance_type or not engine or not region:
         return pricing_unknown("RDS pricing requires AWS Pricing API with instance_type, engine, and region.")
 
-    print(f"  Querying RDS pricing for {instance_type} ({engine})...")
-    current_rate = query_rds_pricing(instance_type, engine, profile, region)
+    # Rule 11 (Multi-AZ ~= 2x Single-AZ): price the actual deployment option.
+    if "multi_az" not in details:
+        return pricing_unknown(
+            "RDS finding is missing the multi_az flag - refusing to assume Single-AZ pricing (Rule 11)."
+        )
+    deployment_option = "Multi-AZ" if details.get("multi_az") else "Single-AZ"
+
+    print(f"  Querying RDS pricing for {instance_type} ({engine}, {deployment_option})...")
+    current_rate = query_rds_pricing(instance_type, engine, profile, region, deployment_option)
     if current_rate is None:
         return pricing_unknown("AWS Pricing API did not return RDS pricing.", instance_type=instance_type, engine=engine, region=region)
 
@@ -625,8 +726,8 @@ def calculate_rds_savings(finding: dict, profile: str, use_api: bool = False) ->
     if not recommended_instance_type:
         return pricing_unknown("No exact recommended_instance_type was supplied for RDS rightsizing.")
 
-    print(f"  Querying RDS pricing for recommended target {recommended_instance_type} ({engine})...")
-    recommended_rate = query_rds_pricing(recommended_instance_type, engine, profile, region)
+    print(f"  Querying RDS pricing for recommended target {recommended_instance_type} ({engine}, {deployment_option})...")
+    recommended_rate = query_rds_pricing(recommended_instance_type, engine, profile, region, deployment_option)
     if recommended_rate is None:
         return pricing_unknown(
             "AWS Pricing API did not return pricing for the recommended RDS target.",

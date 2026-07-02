@@ -280,7 +280,7 @@ aws cloudwatch get-metric-statistics \
 
 ---
 
-### SEC-001: CloudWatch Logs No Retention
+### LOG-001: CloudWatch Logs No Retention
 
 **Validation Steps:**
 1. Confirm no retention policy set

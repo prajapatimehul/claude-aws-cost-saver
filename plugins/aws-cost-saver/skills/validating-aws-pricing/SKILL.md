@@ -6,6 +6,7 @@ allowed-tools:
   - Write
   - Bash
   - Grep
+  - mcp__plugin_aws-cost-saver_awslabs-aws-api__call_aws
   - mcp__awslabs-aws-api__call_aws
 ---
 
@@ -29,13 +30,13 @@ This skill validates pricing for ALL findings using the Zero Hallucination Prici
 
 ```bash
 # Validate with default $100 threshold (queries API only for >$100 findings)
-python skills/validating-aws-pricing/scripts/validate_pricing.py findings.json --profile ctm
+python3 "${CLAUDE_SKILL_DIR}/scripts/validate_pricing.py" findings.json --profile your-profile
 
 # Lower threshold to validate more findings
-python skills/validating-aws-pricing/scripts/validate_pricing.py findings.json --profile ctm --threshold 50
+python3 "${CLAUDE_SKILL_DIR}/scripts/validate_pricing.py" findings.json --profile your-profile --threshold 50
 
 # Works with any AWS auth method (SSO, access keys, IAM role)
-python skills/validating-aws-pricing/scripts/validate_pricing.py findings.json  # uses default credentials
+python3 "${CLAUDE_SKILL_DIR}/scripts/validate_pricing.py" findings.json  # uses default credentials
 ```
 
 ## What Gets Updated
@@ -46,8 +47,9 @@ For findings **above threshold** (default $100):
 3. Marks `api_validated: true` in metadata
 
 For findings **below threshold**:
-1. Uses fallback estimates (fast, no API calls)
-2. Marks `api_validated: false` in metadata
+1. Preserves pricing that already carries a compliant `pricing_source` and `calculation`
+2. Resolves from the verified us-east-1 table where an exact formula exists
+3. Otherwise sets `monthly_savings=0` with `pricing_unknown=true` — it NEVER estimates
 
 All findings get `pricing_validated` metadata showing the source.
 
@@ -81,7 +83,7 @@ ri_monthly = ri_upfront / 12 + ri_hourly * 730
 savings = on_demand_monthly - ri_monthly  # ~40-60% typically
 ```
 
-### CloudWatch Logs (SEC-001)
+### CloudWatch Logs (LOG-001)
 Savings = Storage cost that can be avoided with retention policy
 ```python
 savings = stored_gb * 0.03  # $0.03 per GB-month
@@ -191,7 +193,7 @@ For any finding > $100, get usage-type breakdown:
 
 ```bash
 aws ce get-cost-and-usage --profile {profile} \
-  --time-period Start=2025-12-01,End=2026-01-01 \
+  --time-period Start={LAST_MONTH_START},End={LAST_MONTH_END} \
   --granularity MONTHLY \
   --metrics UnblendedCost \
   --filter '{"Dimensions": {"Key": "SERVICE", "Values": ["AmazonCloudWatch"]}}' \
