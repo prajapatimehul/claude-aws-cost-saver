@@ -2,14 +2,21 @@
 
 ## Purpose
 
-This repository ships a **Claude Code plugin**, but in **Codex** it should be used through
-AWS MCP plus these repository instructions.
+This repository ships plugin manifests for both **Claude Code**
+(`.claude-plugin/`) and **Codex** (`.codex-plugin/`, `.agents/plugins/`).
 
-Do not assume a Codex plugin marketplace or Codex slash commands.
-For Codex, the runtime entrypoint is the AWS MCP server and prompts in this repository,
-not `/aws-cost-saver:scan`.
+If your Codex version supports plugin marketplaces, install the plugin directly:
 
-## Codex Setup
+```bash
+codex plugin marketplace add prajapatimehul/claude-aws-cost-saver
+```
+
+Then run `/plugins` inside Codex to install **aws-cost-saver**.
+
+Otherwise, use the MCP-only setup below: the runtime entrypoint is the AWS MCP
+server plus these repository instructions, not `/aws-cost-saver:scan`.
+
+## Codex Setup (MCP only)
 
 Run these commands from the repository root:
 

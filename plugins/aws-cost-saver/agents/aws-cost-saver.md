@@ -591,85 +591,12 @@ aws pricing get-products --region us-east-1 \
   --max-results 5
 ```
 
-#### ElastiCache Pricing
-```bash
-aws pricing get-products --region us-east-1 \
-  --service-code AmazonElastiCache \
-  --filters \
-    "Type=TERM_MATCH,Field=instanceType,Value={ACTUAL_NODE_TYPE}" \
-    "Type=TERM_MATCH,Field=location,Value={LOCATION_NAME}" \
-    "Type=TERM_MATCH,Field=cacheEngine,Value={ACTUAL_ENGINE}" \
-  --max-results 1
-```
+#### Other Services (ElastiCache, OpenSearch, DocumentDB, Neptune, Redshift, SageMaker, MSK, FSx)
 
-#### OpenSearch Pricing
-```bash
-aws pricing get-products --region us-east-1 \
-  --service-code AmazonES \
-  --filters \
-    "Type=TERM_MATCH,Field=instanceType,Value={ACTUAL_INSTANCE_TYPE}" \
-    "Type=TERM_MATCH,Field=location,Value={LOCATION_NAME}" \
-  --max-results 1
-```
-
-#### DocumentDB Pricing
-```bash
-aws pricing get-products --region us-east-1 \
-  --service-code AmazonDocDB \
-  --filters \
-    "Type=TERM_MATCH,Field=instanceType,Value={ACTUAL_INSTANCE_TYPE}" \
-    "Type=TERM_MATCH,Field=location,Value={LOCATION_NAME}" \
-  --max-results 1
-```
-
-#### Neptune Pricing
-```bash
-aws pricing get-products --region us-east-1 \
-  --service-code AmazonNeptune \
-  --filters \
-    "Type=TERM_MATCH,Field=instanceType,Value={ACTUAL_INSTANCE_TYPE}" \
-    "Type=TERM_MATCH,Field=location,Value={LOCATION_NAME}" \
-  --max-results 1
-```
-
-#### Redshift Pricing
-```bash
-aws pricing get-products --region us-east-1 \
-  --service-code AmazonRedshift \
-  --filters \
-    "Type=TERM_MATCH,Field=instanceType,Value={ACTUAL_NODE_TYPE}" \
-    "Type=TERM_MATCH,Field=location,Value={LOCATION_NAME}" \
-  --max-results 1
-```
-
-#### SageMaker Pricing
-```bash
-aws pricing get-products --region us-east-1 \
-  --service-code AmazonSageMaker \
-  --filters \
-    "Type=TERM_MATCH,Field=instanceType,Value={ACTUAL_INSTANCE_TYPE}" \
-    "Type=TERM_MATCH,Field=location,Value={LOCATION_NAME}" \
-  --max-results 1
-```
-
-#### MSK (Kafka) Pricing
-```bash
-aws pricing get-products --region us-east-1 \
-  --service-code AmazonMSK \
-  --filters \
-    "Type=TERM_MATCH,Field=instanceType,Value={ACTUAL_INSTANCE_TYPE}" \
-    "Type=TERM_MATCH,Field=location,Value={LOCATION_NAME}" \
-  --max-results 1
-```
-
-#### FSx Pricing
-```bash
-aws pricing get-products --region us-east-1 \
-  --service-code AmazonFSx \
-  --filters \
-    "Type=TERM_MATCH,Field=location,Value={LOCATION_NAME}" \
-  --max-results 10
-```
+Read `${CLAUDE_PLUGIN_ROOT}/references/pricing-api-queries.md` for the query
+template of any other service (and the complete region location map). Same
+pattern: `--service-code` for the service, `instanceType` + `location`
+TERM_MATCH filters, `--max-results 1`.
 
 ### Parsing the Pricing API Response
 
@@ -682,41 +609,25 @@ PriceList[0] → parse as JSON → terms.OnDemand → first value → priceDimen
 
 If the response is empty (`PriceList: []`), the API did not find a match. Go to Step 2.
 
-### Region Location Map (COMPLETE)
+### Region Location Map
+
+Common regions:
 
 | Region Code | Location Name |
 |-------------|---------------|
 | us-east-1 | US East (N. Virginia) |
 | us-east-2 | US East (Ohio) |
-| us-west-1 | US West (N. California) |
 | us-west-2 | US West (Oregon) |
 | eu-west-1 | EU (Ireland) |
-| eu-west-2 | EU (London) |
-| eu-west-3 | EU (Paris) |
 | eu-central-1 | EU (Frankfurt) |
-| eu-central-2 | EU (Zurich) |
-| eu-north-1 | EU (Stockholm) |
-| eu-south-1 | EU (Milan) |
-| ap-southeast-1 | Asia Pacific (Singapore) |
-| ap-southeast-2 | Asia Pacific (Sydney) |
-| ap-northeast-1 | Asia Pacific (Tokyo) |
-| ap-northeast-2 | Asia Pacific (Seoul) |
-| ap-northeast-3 | Asia Pacific (Osaka) |
 | ap-south-1 | Asia Pacific (Mumbai) |
-| ap-east-1 | Asia Pacific (Hong Kong) |
-| sa-east-1 | South America (Sao Paulo) |
-| ca-central-1 | Canada (Central) |
-| ca-west-1 | Canada West (Calgary) |
-| me-south-1 | Middle East (Bahrain) |
-| me-central-1 | Middle East (UAE) |
-| af-south-1 | Africa (Cape Town) |
-| il-central-1 | Israel (Tel Aviv) |
-| ap-south-2 | Asia Pacific (Hyderabad) |
-| ap-southeast-3 | Asia Pacific (Jakarta) |
-| ap-southeast-4 | Asia Pacific (Melbourne) |
-| eu-south-2 | Europe (Spain) |
+| ap-southeast-1 | Asia Pacific (Singapore) |
+| ap-northeast-1 | Asia Pacific (Tokyo) |
 
-If the region is NOT in this map, do NOT guess the location name. Set `pricing_unknown: true`.
+For any other region, read the complete 29-region map in
+`${CLAUDE_PLUGIN_ROOT}/references/pricing-api-queries.md`. If the region is
+not in that map either, do NOT guess the location name. Set
+`pricing_unknown: true`.
 
 ### Step 2: Verified Pricing Table (Fallback ONLY)
 

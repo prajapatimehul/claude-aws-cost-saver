@@ -5,11 +5,12 @@ AWS Cost Optimization System - Simplified CLI
 Designed to work with Claude Code and AWS MCP for direct account scanning.
 
 Usage:
-    python main.py scan                    # Scan account using AWS MCP
-    python main.py scan --from-cur <file>  # Analyze from CUR file
-    python main.py report                  # Generate report from last scan
-    python main.py spend-hotspots          # Rank scan focus using Cost Explorer
     python main.py checks                  # List all 180 checks
+    python main.py check EC2-001           # Show one check in detail
+    python main.py scan-info               # Show AWS CLI commands a scan runs
+    python main.py spend-hotspots          # Rank scan focus using Cost Explorer
+    python main.py report                  # Generate report from findings.json
+    python main.py init                    # Create a findings.json template
 """
 
 import argparse
@@ -18,7 +19,6 @@ import sys
 import yaml
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 
 ALL_DOMAINS = [

@@ -1,6 +1,6 @@
 ---
 name: reviewing-findings
-description: Reviews AWS cost optimization findings for accuracy, validates recommendations, and filters false positives using confidence-based scoring. Use after scanning to ensure high-quality recommendations.
+description: Reviews AWS cost optimization findings (findings.json) for accuracy, validates recommendations, and filters false positives using confidence-based scoring. Use after an AWS cost scan to adjust confidence for resource age, environment, ASG membership, DR/standby naming, and IaC management, and to mark each finding approved, needs_validation, or filtered before reporting.
 allowed-tools:
   - Read
   - Write
@@ -95,7 +95,7 @@ Add review metadata to each finding:
       "business_context": 85,
       "historical_pattern": 85
     },
-    "action": "recommended",
+    "action": "approved",
     "notes": "Resource verified idle for 21 days"
   }
 }

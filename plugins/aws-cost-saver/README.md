@@ -23,13 +23,13 @@ Then launch Codex and run `/plugins` to browse and install **aws-cost-saver**.
 
 ### MCP server
 
-This plugin configures the [AWS API MCP server](https://github.com/awslabs/mcp/tree/main/src/aws-api-mcp-server) (`mcp__awslabs-aws-api__call_aws`) via `.mcp.json`. A PreToolUse hook (`hooks.json`) blocks any write/mutation verbs so the scan stays read-only.
+This plugin configures the [AWS API MCP server](https://github.com/awslabs/mcp/tree/main/src/aws-api-mcp-server) via `.mcp.json`. A PreToolUse hook (`hooks/hooks.json` + `scripts/guard_readonly.py`) enforces a read-only allowlist — only `describe-`/`get-`/`list-`/`lookup-`/`search-` style AWS CLI operations are permitted; everything else is denied by default.
 
 ### Commands
 
 | Command | Description |
 |---------|-------------|
-| `/aws-cost-saver:scan` | Full parallel scan across 11 domains, with Cost Explorer + Compute Optimizer + RI/SP recommendations. |
+| `/aws-cost-saver:scan` | Full parallel scan across 11 domains, with Cost Explorer + Cost Optimization Hub + Compute Optimizer + RI/SP recommendations. |
 
 ### Skills
 

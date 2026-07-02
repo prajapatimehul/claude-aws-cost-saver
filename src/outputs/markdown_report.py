@@ -4,10 +4,9 @@ Markdown Report Generator for AWS Cost Optimization
 Generates clean, readable Markdown reports from analysis findings.
 """
 
-from dataclasses import dataclass
+import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 
 def generate_markdown_report(
@@ -184,7 +183,6 @@ def generate_findings_detail_md(
         if f.get('details'):
             lines.append("### Details")
             lines.append("```json")
-            import json
             lines.append(json.dumps(f.get('details'), indent=2))
             lines.append("```")
             lines.append("")

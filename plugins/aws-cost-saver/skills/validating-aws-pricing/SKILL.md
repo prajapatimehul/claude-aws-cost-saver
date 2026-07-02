@@ -1,6 +1,6 @@
 ---
 name: validating-aws-pricing
-description: MANDATORY validation of AWS cost findings. Cross-checks savings estimates against actual billing data and correct pricing formulas. Catches errors like confusing storage vs ingestion costs. Run BEFORE generating any report.
+description: MANDATORY validation of AWS cost findings (findings.json) before any report is generated. Cross-checks every monthly_savings estimate against the AWS Pricing API, the verified pricing table, and actual Cost Explorer billing. Catches errors like storage vs ingestion price confusion, missing IOPS components, wrong OS or deployment option, and savings that exceed service spend.
 allowed-tools:
   - Read
   - Write

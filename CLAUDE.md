@@ -39,11 +39,13 @@ aws ec2 describe-regions --query 'Regions[].RegionName'
 
 ```bash
 aws ce get-cost-and-usage \
-  --time-period Start=2025-12-01,End=2026-01-01 \
+  --time-period Start={LAST_MONTH_START},End={LAST_MONTH_END} \
   --granularity MONTHLY \
   --metrics UnblendedCost \
   --group-by Type=DIMENSION,Key=SERVICE
 ```
+
+Compute the window at scan time (first day of last month to first day of the current month) — never hardcode dates.
 
 This returns actual costs including:
 - Data transfer charges
@@ -91,11 +93,11 @@ Save findings to `findings.json`:
   "metadata": {
     "account_id": "123456789012",
     "regions": ["us-east-1", "us-west-2"],
-    "scan_date": "2024-01-19T10:00:00Z"
+    "scan_date": "{SCAN_TIMESTAMP}"
   },
   "summary": {
     "actual_monthly_spend": 4111.88,
-    "spend_source": "AWS Cost Explorer (December 2025)",
+    "spend_source": "AWS Cost Explorer (last full month)",
     "total_potential_savings": 656.49
   },
   "findings": [
@@ -456,8 +458,9 @@ For offline analysis with Cost and Usage Report files:
 ```python
 from src.parsers.cur_parser import CURParser
 
-parser = CURParser()
-data = parser.parse('path/to/cur.parquet')
+parser = CURParser('path/to/cur-data-directory')
+for chunk in parser.parse(domain='compute'):  # yields pandas DataFrames
+    ...
 ```
 
 Supported formats: Parquet (preferred), CSV

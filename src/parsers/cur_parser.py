@@ -8,15 +8,12 @@ Handles Parquet and CSV CUR files with:
 - Metadata extraction
 """
 
-import os
 import json
-from datetime import datetime
 from typing import Dict, List, Optional, Any, Generator
 from pathlib import Path
 
 try:
     import pyarrow.parquet as pq
-    import pyarrow as pa
     PYARROW_AVAILABLE = True
 except ImportError:
     PYARROW_AVAILABLE = False
