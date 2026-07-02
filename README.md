@@ -52,7 +52,7 @@ Or just ask: `Scan my AWS account for cost savings`
 
 ## Features
 
-- **174 checks** across EC2, RDS, S3, Lambda, ECS, EKS, Aurora, SageMaker, and 30+ services
+- **180 checks** across EC2, RDS, S3, Lambda, ECS, EKS, Aurora, SageMaker, and 30+ services
 - **Parallel scanning** - 11 domain agents run simultaneously
 - **Confidence scoring** - filters false positives
 - **Real pricing** - uses AWS Cost Explorer
@@ -86,7 +86,7 @@ The plugin pre-wires the **AWS API MCP server** in [`.mcp.json`](plugins/aws-cos
 The repository also ships a standalone Python CLI (`main.py`) usable without a coding agent:
 
 ```bash
-python main.py checks                       # list all 174 checks
+python main.py checks                       # list all 180 checks
 python main.py check EC2-001                # detail for one check
 python main.py scan-info                    # show the AWS CLI commands a scan runs
 python main.py spend-hotspots --profile X   # rank scan order by real spend (Cost Explorer)
@@ -122,13 +122,13 @@ python main.py report --findings findings.json
 
 | Domain | Checks | Key Areas |
 |--------|--------|-----------|
-| **Compute** | 27 | EC2 idle/over-provisioned, Compute Optimizer ML, EBS, GP2→GP3 |
+| **Compute** | 28 | EC2 idle/over-provisioned, Compute Optimizer ML, Cost Optimization Hub, EBS, GP2→GP3 |
 | **Storage** | 24 | S3 lifecycle, CloudWatch Logs, snapshots, Secrets Manager |
-| **Database** | 15 | RDS idle/over-provisioned, RI coverage |
+| **Database** | 17 | RDS idle/over-provisioned, extended support, Valkey migration, RI coverage |
 | **Networking** | 19 | Unused EIPs, NAT, public IPv4, data transfer, VPC endpoints |
-| **Serverless** | 10 | Lambda memory, unused functions |
-| **Reservations** | 12 | RI/Savings Plans coverage, purchase recommendations |
-| **Containers** | 16 | ECS/EKS idle, Fargate, Spot, ECR lifecycle |
+| **Serverless** | 11 | Lambda memory, unused functions, SQS provisioned-mode idle |
+| **Reservations** | 13 | RI/SP/Database SP coverage, purchase recommendations |
+| **Containers** | 17 | ECS/EKS idle, extended support versions, Fargate, Spot, ECR lifecycle |
 | **Advanced DBs** | 18 | Aurora, DocumentDB, Neptune, Redshift |
 | **Analytics** | 15 | SageMaker, EMR, OpenSearch |
 | **Data Pipelines** | 12 | Kinesis, MSK, Glue |

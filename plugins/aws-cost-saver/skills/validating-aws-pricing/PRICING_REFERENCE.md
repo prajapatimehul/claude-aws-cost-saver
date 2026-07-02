@@ -408,7 +408,7 @@ def ri_savings(on_demand_hourly, ri_upfront, ri_hourly, term_years=1):
     }
 ```
 
-## Common Pricing (us-east-1, 2026)
+## Common Pricing (us-east-1, verified July 2026)
 
 ### EC2 Instances
 
@@ -435,7 +435,7 @@ def ri_savings(on_demand_hourly, ri_upfront, ri_hourly, term_years=1):
 | db.r5.xlarge | $0.50 | $365.00 |
 | db.r5.2xlarge | $1.00 | $730.00 |
 
-### ElastiCache (Redis)
+### ElastiCache (Redis OSS)
 
 | Node Type | Hourly | Monthly |
 |-----------|--------|---------|
@@ -444,14 +444,33 @@ def ri_savings(on_demand_hourly, ri_upfront, ri_hourly, term_years=1):
 | cache.t3.medium | $0.068 | $49.64 |
 | cache.r5.large | $0.182 | $132.86 |
 
+**ElastiCache notes (2026):**
+- Valkey engine nodes are ~20% cheaper than the Redis OSS prices above (serverless ~33%).
+- Redis OSS 4.x/5.x nodes pay an **extended-support surcharge of +80%** since Feb 2026 (+160% from Feb 2028); Redis OSS 6.x follows Feb 2027.
+- Latest Graviton node generation is m7g/r7g — `cache.m8g`/`cache.r8g` do NOT exist.
+
 ### Storage
 
 | Type | Price | Unit |
 |------|-------|------|
-| EBS gp3 | $0.08 | GB-month |
+| EBS gp3 | $0.08 | GB-month (+$0.005/IOPS >3000, +$0.04/MBps >125) |
 | EBS gp2 | $0.10 | GB-month |
-| EBS io2 | $0.125 | GB-month |
+| EBS io2 | $0.125 | GB-month + tiered IOPS: $0.065 (first 32K), $0.046 (32K-64K), $0.032 (>64K) |
 | S3 Standard | $0.023 | GB-month (first 50TB) |
 | S3 IA | $0.0125 | GB-month |
 | EFS | $0.30 | GB-month |
-| CloudWatch Logs | $0.03 | GB-month |
+| CloudWatch Logs storage | $0.03 | GB-month |
+| CloudWatch Logs ingestion | $0.50 | GB first 10TB/mo, tiered down to $0.05 at scale (May 2025) |
+
+Note: gp3 now supports up to 64 TiB / 80,000 IOPS / 2,000 MiB/s (Sep 2025), so most io1/io2 volumes can migrate to gp3.
+
+### Other Verified Rates (2026)
+
+| Item | Price | Unit |
+|------|-------|------|
+| DynamoDB on-demand writes | $0.625 | per million WRU (halved Nov 2024 — do not use older prices) |
+| DynamoDB on-demand reads | $0.125 | per million RRU (halved Nov 2024) |
+| RDS Extended Support (year 1-2) | $0.100 | per vCPU-hour |
+| RDS Extended Support (year 3+) | $0.200 | per vCPU-hour |
+| EKS control plane (standard) | $0.10 | per hour ($73/mo) |
+| EKS control plane (extended support) | $0.60 | per hour ($438/mo) |

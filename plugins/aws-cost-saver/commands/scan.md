@@ -77,16 +77,20 @@ Use `AskUserQuestion`:
 }
 ```
 
-## Step 3.5: Check Compute Optimizer Enrollment
+## Step 3.5: Check Compute Optimizer + Cost Optimization Hub Enrollment
 
 ```bash
 aws compute-optimizer get-enrollment-status --profile {profile}
+aws cost-optimization-hub list-enrollment-statuses --region us-east-1 --profile {profile}
 ```
 
-If status is `Inactive`, inform the user:
+If Compute Optimizer status is `Inactive`, inform the user:
 > "AWS Compute Optimizer is not enabled. It provides free ML-powered rightsizing and idle detection. Enable with: `aws compute-optimizer update-enrollment-status --status Active`"
 
-Store `compute_optimizer_active: true/false` in metadata. Pass to domain agents.
+If Cost Optimization Hub is not enrolled, inform the user:
+> "Cost Optimization Hub is not enabled. It is free and aggregates deduplicated, discount-aware savings recommendations across all regions and accounts. Enable it in the Billing console or with: `aws cost-optimization-hub update-enrollment-status --status Active --region us-east-1`"
+
+Store `compute_optimizer_active` and `cost_optimization_hub_active` in metadata. Pass both to domain agents.
 
 ## Step 4: Get Actual Monthly Spend + Data Transfer Breakdown
 

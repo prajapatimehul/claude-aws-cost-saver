@@ -1,7 +1,7 @@
 {
   "name": "aws-cost-saver",
   "version": "2.0.0",
-  "description": "174 AWS cost optimization checks with Compute Optimizer ML integration, data transfer analysis, and reservation purchase recommendations.",
+  "description": "180 AWS cost optimization checks with Compute Optimizer ML integration, data transfer analysis, and reservation purchase recommendations.",
   "author": {
     "name": "Mehul Prajapati",
     "url": "https://github.com/prajapatimehul"

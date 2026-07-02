@@ -9,7 +9,7 @@ Usage:
     python main.py scan --from-cur <file>  # Analyze from CUR file
     python main.py report                  # Generate report from last scan
     python main.py spend-hotspots          # Rank scan focus using Cost Explorer
-    python main.py checks                  # List all 174 checks
+    python main.py checks                  # List all 180 checks
 """
 
 import argparse
@@ -214,7 +214,7 @@ def cmd_init(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='AWS Cost Optimization - 174 checks across 11 domains',
+        description='AWS Cost Optimization - 180 checks across 11 domains',
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
@@ -267,7 +267,7 @@ def main():
         parser.print_help()
         print("\n" + "=" * 50)
         print("Quick Start:")
-        print("  python main.py checks          # List all 174 checks")
+        print("  python main.py checks          # List all 180 checks")
         print("  python main.py check EC2-001   # View specific check")
         print("  python main.py scan-info       # Show AWS CLI commands needed")
         print("  python main.py spend-hotspots  # Rank scan focus from Cost Explorer")

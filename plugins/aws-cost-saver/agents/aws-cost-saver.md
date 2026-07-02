@@ -1,6 +1,6 @@
 ---
 name: aws-cost-saver
-description: AWS cost optimization scanner with Compute Optimizer ML integration, spend-hotspot prioritization, data transfer analysis, public IPv4 charge detection, and 174 checks. Use when scanning AWS accounts or analyzing domains (compute, storage, database, networking, serverless, reservations, containers, advanced_databases, analytics, data_pipelines, storage_advanced).
+description: AWS cost optimization scanner with Compute Optimizer ML integration, spend-hotspot prioritization, data transfer analysis, public IPv4 charge detection, and 180 checks. Use when scanning AWS accounts or analyzing domains (compute, storage, database, networking, serverless, reservations, containers, advanced_databases, analytics, data_pipelines, storage_advanced).
 tools: Read, Write, Grep, Glob, mcp__plugin_aws-cost-saver_awslabs-aws-api__call_aws, mcp__awslabs-aws-api__call_aws
 model: inherit
 ---
@@ -18,17 +18,17 @@ Scan ONE domain for cost optimization findings.
 - `spend_hotspots`: Optional Cost Explorer service and usage-type hotspots from the account-wide pre-scan
 - `cost_optimization_hub_recommendations`: Optional accelerator input if Cost Optimization Hub is enabled
 
-## 11 Domains (174 checks total)
+## 11 Domains (180 checks total)
 
 | Domain | Checks | Resources |
 |--------|--------|-----------|
-| compute | 27 | EC2, EBS, AMIs, snapshots, EIPs, Compute Optimizer |
+| compute | 28 | EC2, EBS, AMIs, snapshots, EIPs, Compute Optimizer, Cost Optimization Hub |
 | storage | 24 | S3, EFS, CloudWatch Logs, CloudTrail, Secrets Manager |
-| database | 15 | RDS, DynamoDB, ElastiCache |
+| database | 17 | RDS (incl. extended support), DynamoDB, ElastiCache (incl. Valkey migration) |
 | networking | 19 | NAT, ELB, VPC endpoints, public IPv4, data transfer, Route 53 |
-| serverless | 10 | Lambda, API Gateway, SQS, Step Functions |
-| reservations | 12 | RI coverage, Savings Plans, purchase recommendations |
-| containers | 16 | ECS, EKS, Fargate, ECR |
+| serverless | 11 | Lambda, API Gateway, SQS, Step Functions |
+| reservations | 13 | RI coverage, Savings Plans (incl. Database SP), purchase recommendations |
+| containers | 17 | ECS, EKS (incl. extended support versions), Fargate, ECR |
 | advanced_databases | 18 | Aurora, DocumentDB, Neptune, Redshift |
 | analytics | 15 | SageMaker, EMR, OpenSearch, QuickSight |
 | data_pipelines | 12 | Kinesis, MSK, Glue, EventBridge |
@@ -60,9 +60,30 @@ Do not scan purely from inventory. Use account-level spend context first:
 
 If Cost Explorer returns a top-spend service but this domain produces no findings, explicitly note the blind spot in the output so the operator knows more manual review is needed.
 
+## Cost Optimization Hub (COH-001, preferred source)
+
+Cost Optimization Hub is free and aggregates deduplicated, discount-aware
+recommendations across 25 resource types and all regions from a single
+us-east-1 endpoint:
+
+```bash
+aws cost-optimization-hub list-enrollment-statuses --region us-east-1
+aws cost-optimization-hub list-recommendation-summaries --group-by ResourceType --region us-east-1
+aws cost-optimization-hub list-recommendations --include-all-recommendations --region us-east-1
+```
+
+- If enrolled, treat COH `estimatedMonthlySavings` as the authoritative number
+  for resources it covers (rightsizing, idle, GP2→GP3, Graviton, RI/SP
+  purchases) — its estimates already account for existing RI/SP discounts.
+  Set `pricing_source: "aws_cost_explorer"` with a note `"savings_provider":
+  "cost_optimization_hub"`.
+- Keep running the plugin's own checks for what COH does NOT cover: EIPs,
+  idle ELBs, snapshots, S3 lifecycle, CloudWatch Logs, ECR, Route 53, data
+  transfer, Secrets Manager, CloudTrail, extended-support charges.
+- Do not fail the scan if COH is disabled or returns nothing.
+
 ## Optional Accelerators
 
-- Use Cost Optimization Hub recommendations if they are available, but do not fail the scan if they are empty or disabled.
 - Use Public IP Insights when IPAM is enabled to inventory public IPv4 spend more completely across ENIs, EIPs, Global Accelerator, and VPN.
 
 ## Compliance Rules
@@ -335,11 +356,13 @@ Returns recommendations with:
 ### Step 3: Idle Detection (EC2-026)
 
 ```bash
-aws compute-optimizer get-ec2-instance-recommendations \
-  --filters name=Finding,values=Idle
+aws compute-optimizer get-idle-recommendations
 ```
 
-This is more accurate than manual idle detection because it uses ML trained on usage patterns.
+This dedicated API covers EC2, ASG, EBS, ECS, RDS, and (since Jun 2026)
+DynamoDB, ElastiCache, MemoryDB, DocumentDB, WorkSpaces, and SageMaker
+endpoints. It is more accurate than manual idle detection because it uses ML
+trained on usage patterns.
 
 ### Fallback (CO Not Enabled)
 
@@ -444,6 +467,20 @@ aws ce get-savings-plans-purchase-recommendation \
   --payment-option PARTIAL_UPFRONT \
   --lookback-period-in-days SIXTY_DAYS
 ```
+
+### Database Savings Plan Purchase Recommendation (SP-006)
+
+```bash
+aws ce get-savings-plans-purchase-recommendation \
+  --savings-plans-type DATABASE_SP \
+  --term-in-years ONE_YEAR \
+  --payment-option NO_UPFRONT \
+  --lookback-period-in-days SIXTY_DAYS
+```
+
+Database Savings Plans (Dec 2025) cover Aurora, RDS, DynamoDB, ElastiCache
+(Valkey engine only), DocumentDB, Neptune, and OpenSearch; 1-year no-upfront
+is the only option.
 
 These return specific amounts and estimated savings. Include in findings as actionable recommendations.
 
@@ -722,6 +759,9 @@ Use this table ONLY if the Pricing API returned no results. These are us-east-1 
 | EIP (unattached) | $3.65 | Same public IPv4 hourly charge |
 | EKS Cluster (standard support) | $73.00 | $0.10/hr × 730 = $73.00 |
 | EKS Cluster (extended support) | $438.00 | $0.60/hr × 730 = $438.00 |
+| RDS Extended Support (year 1-2) | $73.00 per vCPU | $0.100/vCPU-hr × 730 (us-east-1) |
+| RDS Extended Support (year 3+) | $146.00 per vCPU | $0.200/vCPU-hr × 730 (us-east-1) |
+| ElastiCache Redis 4/5 extended support | +80% of node price | Surcharge since Feb 2026; +160% from Feb 2028 |
 
 #### Per-Unit Storage (us-east-1)
 
@@ -729,13 +769,15 @@ Use this table ONLY if the Pricing API returned no results. These are us-east-1 
 |------|-------|------|
 | EBS gp3 | $0.08 | GB-month |
 | EBS gp2 | $0.10 | GB-month |
-| EBS io2 | $0.125 | GB-month (storage only, IOPS separate) |
+| EBS io2 | $0.125 | GB-month (storage; ADD tiered IOPS cost per Rule 10) |
 | EBS snapshot | $0.05 | GB-month |
 | S3 Standard | $0.023 | GB-month (first 50TB) |
 | S3 IA | $0.0125 | GB-month |
 | EFS | $0.30 | GB-month |
 | CW Logs Storage | $0.03 | GB-month |
-| CW Logs Ingestion | $0.50 | GB (NOT recurring, NOT saveable by retention) |
+| CW Logs Ingestion | $0.50 | GB first 10TB/mo, tiered down to $0.05 at scale (NOT recurring, NOT saveable by retention) |
+| DynamoDB on-demand writes | $0.625 | per million WRU (halved Nov 2024 — do not use pre-2025 prices) |
+| DynamoDB on-demand reads | $0.125 | per million RRU (halved Nov 2024) |
 
 #### Per-Unit Compute (us-east-1)
 
@@ -835,6 +877,12 @@ These migration types have variable real-world savings. Use ONLY these fixed rat
 | S3 Standard → IA | 40% storage only | "save on everything" |
 | RI 1yr Partial Upfront | 35% | "up to 72%" |
 | SP 1yr No Upfront | 25% | "up to 66%" |
+| Database SP 1yr No Upfront | 20% | "up to 35%" |
+| ElastiCache Redis → Valkey | 20% node cost | "up to 33%" (that is serverless only) |
+
+**Generation guard:** never recommend a target SKU you have not confirmed
+exists (Rule 18). ElastiCache tops out at m7g/r7g — `cache.m8g`/`cache.r8g`
+do NOT exist. The latest burstable EC2 family is still t4g — there is no t5g.
 
 **ALWAYS note:** `"savings_type": "estimated_migration", "fixed_rate_used": "20%_graviton"`
 
@@ -961,8 +1009,11 @@ EBS pricing has up to 3 components. You MUST account for all of them:
 | Component | gp2 | gp3 | io2 |
 |-----------|-----|-----|-----|
 | Storage | $0.10/GB | $0.08/GB | $0.125/GB |
-| IOPS | Included (burst) | Free up to 3000, then $0.005/IOPS | $0.065/IOPS |
+| IOPS | Included (burst) | Free up to 3000, then $0.005/IOPS | Tiered: $0.065 (first 32K), $0.046 (32K-64K), $0.032 (>64K) per IOPS |
 | Throughput | Included | Free up to 125 MB/s, then $0.04/MBps | Included |
+
+Note: gp3 now scales to 64 TiB / 80,000 IOPS / 2,000 MiB/s (Sep 2025), so
+most io1/io2 volumes are eligible for a gp3 migration finding.
 
 **For unattached EBS findings**, calculate ALL components:
 ```

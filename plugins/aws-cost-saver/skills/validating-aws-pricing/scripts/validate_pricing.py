@@ -99,6 +99,7 @@ CHECK_ID_ROUTING = {
     "CACHE-001": "elasticache",  # Oversized ElastiCache
     "CACHE-002": "elasticache",  # Reserved Node Opportunity
     "CACHE-003": "elasticache",  # Unused Clusters
+    "CACHE-004": "elasticache",  # Redis OSS Extended Support / Valkey Migration
 
     # CloudWatch/CloudTrail checks
     "LOG-001": "cloudwatch",   # CloudWatch Logs Retention
@@ -111,6 +112,7 @@ CHECK_ID_ROUTING = {
     "LAMBDA-003": "lambda",    # Provisioned Concurrency Review
     "LAMBDA-004": "lambda",    # Unused Functions
     "LAMBDA-005": "lambda",    # ARM64 Migration Opportunity
+    "LAMBDA-006": "lambda",    # Idle SQS Event Source Provisioned Mode
 
     # S3 checks
     "S3-001": "s3",           # No Lifecycle Policy
@@ -141,6 +143,13 @@ CHECK_ID_ROUTING = {
     # Reservation purchase recommendations (use AWS-provided savings)
     "RI-007": "reservations", # RI Purchase Recommendation
     "SP-005": "reservations", # SP Purchase Recommendation
+    "SP-006": "reservations", # Database SP Purchase Recommendation
+    "COH-001": "reservations", # Cost Optimization Hub (AWS-provided estimates)
+
+    # Extended-support surcharges (agent computes from verified rates;
+    # routed to "misc" so unpriceable findings are zeroed, not guessed)
+    "RDS-009": "misc",        # RDS Extended Support Charges
+    "EKS-006": "misc",        # EKS Extended Support Version Charges
 }
 
 # Map service domain to Cost Explorer service name

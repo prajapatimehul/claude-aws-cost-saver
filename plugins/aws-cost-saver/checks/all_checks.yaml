@@ -1,12 +1,12 @@
 # AWS Cost Optimization - Complete Check Registry
-# 174 checks across 11 domains with AWS CLI commands for scanning
+# 180 checks across 11 domains with AWS CLI commands for scanning
 # Focused on direct cost savings (removed compliance-only checks)
 
-version: "5.1"
-total_checks: 174
+version: "5.2"
+total_checks: 180
 
 # ============================================================================
-# COMPUTE DOMAIN (27 checks)
+# COMPUTE DOMAIN (28 checks)
 # ============================================================================
 compute:
   - id: EC2-001
@@ -36,12 +36,19 @@ compute:
 
   - id: EC2-003
     name: Previous Generation Instances
-    description: Instances using previous generation types (m4, c4, r4, t2, etc.)
+    description: Instances using previous or aging generation types (current generations as of mid-2026 are 8th-gen x86 m8i/c8i/r8i and Graviton4/5 m8g/c8g/r8g/m9g)
     severity: medium
     category: previous_generation
     aws_cli:
       - aws ec2 describe-instances --filters "Name=instance-state-name,Values=running"
     previous_gen_prefixes: [m4, c4, r4, t2, i2, d2, m3, c3, r3]
+    aging_gen_prefixes: [m5, c5, r5, m6i, c6i, r6i]
+    upgrade_targets:
+      m5/m6i/m7i: m8i (x86) or m8g (Graviton)
+      c5/c6i/c7i: c8i (x86) or c8g (Graviton)
+      r5/r6i/r7i: r8i (x86) or r8g (Graviton)
+      t2/t3: t4g (still the latest burstable generation)
+    note: "previous_gen_prefixes are officially previous generation (flag HIGH). aging_gen_prefixes are 2+ generations behind (flag MEDIUM). Savings must come from a per-SKU Pricing API delta, never from marketing price-performance percentages."
     recommendation: Upgrade to current generation for better price/performance
 
   - id: EC2-004
@@ -275,8 +282,8 @@ compute:
     category: idle
     aws_cli:
       - aws compute-optimizer get-enrollment-status
-      - aws compute-optimizer get-ec2-instance-recommendations --filters name=Finding,values=Idle
-    note: "New 2025 API. Consolidates idle detection across EC2, EBS, ASG, ECS, Lambda"
+      - aws compute-optimizer get-idle-recommendations
+    note: "get-idle-recommendations (dedicated API) covers EC2, ASG, EBS, ECS, RDS, and since Jun 2026 also DynamoDB, ElastiCache, MemoryDB, DocumentDB, WorkSpaces, and SageMaker endpoints. Prefer it over filtering get-ec2-instance-recommendations by Finding=Idle."
     recommendation: Terminate or stop idle resources identified by Compute Optimizer
 
   - id: EC2-027
@@ -288,6 +295,18 @@ compute:
       - aws cloudwatch list-metrics --namespace CWAgent --metric-name mem_used_percent --dimensions Name=InstanceId,Value={instance_id}
     note: "Graceful degradation - if mem_used_percent exists, use it. If not, note unavailable."
     recommendation: High-memory instances at low CPU may be cache servers, not idle
+
+  - id: COH-001
+    name: Cost Optimization Hub Recommendations
+    description: Free AWS-native aggregator of rightsizing, idle, upgrade, and commitment recommendations across 25 resource types, deduplicated and discount-aware
+    severity: high
+    category: coverage
+    aws_cli:
+      - aws cost-optimization-hub list-enrollment-statuses --region us-east-1
+      - aws cost-optimization-hub list-recommendation-summaries --group-by ResourceType --region us-east-1
+      - aws cost-optimization-hub list-recommendations --include-all-recommendations --region us-east-1
+    note: "Free. Single endpoint in us-east-1 covers all regions and (from a management account) all member accounts. Savings estimates are after existing RI/SP discounts and deduplicated across overlapping actions - prefer these numbers over locally computed ones for the same resource. Covers EC2/ASG/EBS/Lambda/ECS/RDS/Aurora rightsizing, idle detection (incl. DynamoDB, ElastiCache, MemoryDB, DocumentDB, WorkSpaces, SageMaker endpoints, NAT gateways), GP2->GP3 upgrades, Graviton migration, and RI/SP purchases."
+    recommendation: Enroll in Cost Optimization Hub and treat its recommendations as the primary source for rightsizing, idle, and commitment savings
 
 # ============================================================================
 # STORAGE DOMAIN (24 checks) - includes logs optimization
@@ -542,7 +561,7 @@ storage:
     recommendation: Delete unused secrets ($0.40/secret/month)
 
 # ============================================================================
-# DATABASE DOMAIN (15 checks)
+# DATABASE DOMAIN (17 checks)
 # ============================================================================
 database:
   - id: RDS-001
@@ -582,12 +601,18 @@ database:
 
   - id: RDS-004
     name: Previous Generation Types
-    description: RDS using previous generation instance types
+    description: RDS using previous generation instance types (current generation is db.m8g/db.r8g Graviton4, GA since Nov 2024)
     severity: medium
     category: previous_generation
     aws_cli:
       - aws rds describe-db-instances
     previous_gen_prefixes: [db.m4, db.r4, db.t2, db.m3, db.r3]
+    aging_gen_prefixes: [db.m5, db.r5, db.m6i, db.r6i]
+    upgrade_targets:
+      db.m5/db.m6i: db.m8g (Graviton, OSS engines) or db.m7i
+      db.r5/db.r6i: db.r8g (Graviton, OSS engines) or db.r7i
+      db.t2/db.t3: db.t4g
+    note: "Graviton (db.*g) targets apply to open-source engines (MySQL, PostgreSQL, MariaDB) - SQL Server and Oracle stay on x86. Savings must come from per-SKU Pricing API deltas."
     recommendation: Upgrade to current generation instances
 
   - id: RDS-005
@@ -632,6 +657,17 @@ database:
     aws_cli:
       - aws rds describe-db-instances
     recommendation: Disable Multi-AZ for non-production (50% savings)
+
+  - id: RDS-009
+    name: Extended Support Charges
+    description: RDS/Aurora engines past community EOL bill RDS Extended Support per vCPU-hour ($0.100 years 1-2, $0.200 year 3) on top of the instance price
+    severity: high
+    category: previous_generation
+    aws_cli:
+      - aws rds describe-db-instances --query 'DBInstances[].{id:DBInstanceIdentifier,engine:Engine,version:EngineVersion,class:DBInstanceClass}'
+      - aws rds describe-db-major-engine-versions
+    note: "As of Jul 2026: MySQL 5.7 and PostgreSQL 11 are in year-3 pricing ($0.200/vCPU-hr); PostgreSQL 12/13 and Aurora PostgreSQL 13 are in year 1-2; MySQL 8.0 enters extended support Aug 1, 2026 - flag every MySQL 8.0 instance now. Use describe-db-major-engine-versions for authoritative dates. Instances created with --engine-lifecycle-support open-source-rds-extended-support-disabled are not billed."
+    recommendation: Upgrade the engine major version to stop per-vCPU extended-support charges, prioritizing year-3 engines (double rate)
 
   - id: DDB-001
     name: Provisioned vs On-Demand
@@ -713,6 +749,17 @@ database:
     thresholds:
       days_without_connections: 14
     recommendation: Delete unused clusters
+
+  - id: CACHE-004
+    name: Redis OSS Extended Support / Valkey Migration
+    description: ElastiCache nodes on Redis OSS 4.x/5.x pay an extended-support surcharge (+80% of node price since Feb 2026, +160% from Feb 2028); Redis OSS 6.x follows Feb 2027. Valkey nodes are ~20% cheaper (serverless ~33%)
+    severity: high
+    category: previous_generation
+    aws_cli:
+      - aws elasticache describe-cache-clusters
+      - aws elasticache describe-replication-groups
+    note: "Check Engine and EngineVersion fields. A Redis 4/5 -> Valkey migration removes the surcharge AND applies the Valkey discount. Do not recommend node types newer than m7g/r7g - ElastiCache has no 8th-generation Graviton nodes."
+    recommendation: Migrate Redis OSS 4.x/5.x clusters to Valkey (in-place engine switch supported) to stop extended-support charges and cut node cost ~20%
 
 # ============================================================================
 # NETWORKING DOMAIN (19 checks)
@@ -916,7 +963,7 @@ networking:
     recommendation: Delete hosted zones with only SOA/NS records ($0.50/zone/month)
 
 # ============================================================================
-# SERVERLESS DOMAIN (10 checks)
+# SERVERLESS DOMAIN (11 checks)
 # ============================================================================
 serverless:
   - id: LAMBDA-001
@@ -1025,8 +1072,19 @@ serverless:
       - aws cloudwatch get-metric-statistics --namespace AWS/States --metric-name ExecutionsStarted
     recommendation: Use Express workflows for high-volume, short-duration workloads
 
+  - id: LAMBDA-006
+    name: Idle SQS Event Source Provisioned Mode
+    description: Lambda SQS event source mappings in Provisioned Mode bill a minimum of 2 event poller units (~$13.50/month) even with zero traffic
+    severity: medium
+    category: idle
+    aws_cli:
+      - aws lambda list-event-source-mappings
+      - aws cloudwatch get-metric-statistics --namespace AWS/Lambda --metric-name Invocations --dimensions Name=FunctionName,Value={function_name}
+    note: "Provisioned Mode for SQS ESM launched Nov 2025 ($0.00925/EPU-hour, 2 EPU minimum). Check ProvisionedPollerConfig on each mapping; if present with low/no invocations, the floor cost is pure waste."
+    recommendation: Remove ProvisionedPollerConfig from low-traffic SQS event source mappings and fall back to standard polling
+
 # ============================================================================
-# RESERVATIONS DOMAIN (12 checks)
+# RESERVATIONS DOMAIN (13 checks)
 # ============================================================================
 reservations:
   - id: RI-001
@@ -1147,8 +1205,18 @@ reservations:
     note: "$0.01 per CE API request. Returns specific commitment amounts and estimated savings."
     recommendation: Review and purchase recommended Savings Plans
 
+  - id: SP-006
+    name: Database Savings Plan Purchase Recommendation
+    description: Database Savings Plans (launched Dec 2025) save up to 35% on Aurora, RDS, DynamoDB, ElastiCache (Valkey), DocumentDB, Neptune, Keyspaces, Timestream, DMS, and OpenSearch
+    severity: high
+    category: coverage
+    aws_cli:
+      - aws ce get-savings-plans-purchase-recommendation --savings-plans-type DATABASE_SP --term-in-years ONE_YEAR --payment-option NO_UPFRONT --lookback-period-in-days SIXTY_DAYS
+    note: "$0.01 per CE API request. Database SPs are 1-year no-upfront only. ElastiCache coverage applies to the Valkey engine only - another reason to migrate off Redis OSS."
+    recommendation: Review and purchase recommended Database Savings Plans for steady-state database spend
+
 # ============================================================================
-# CONTAINERS DOMAIN (16 checks) - ECS, EKS, Fargate
+# CONTAINERS DOMAIN (17 checks) - ECS, EKS, Fargate
 # ============================================================================
 containers:
   - id: ECS-001
@@ -1224,7 +1292,7 @@ containers:
       - aws eks describe-nodegroup --cluster-name {cluster} --nodegroup-name {nodegroup}
     thresholds:
       node_count: 0
-    recommendation: Delete idle EKS clusters ($72/month control plane cost)
+    recommendation: Delete idle EKS clusters ($73/month standard control plane, $438/month if the version is in extended support)
 
   - id: EKS-002
     name: Over-provisioned Node Groups
@@ -1265,6 +1333,18 @@ containers:
       - aws eks list-addons --cluster-name {cluster}
       - aws eks describe-addon --cluster-name {cluster} --addon-name {addon}
     recommendation: Review add-on necessity and configuration
+
+  - id: EKS-006
+    name: Extended Support Version Charges
+    description: EKS clusters on a Kubernetes version in extended support pay $0.60/hour instead of $0.10/hour - an extra ~$365/month per cluster
+    severity: high
+    category: previous_generation
+    aws_cli:
+      - aws eks list-clusters
+      - aws eks describe-cluster --name {cluster} --query 'cluster.version'
+      - aws eks describe-cluster-versions
+    note: "Use describe-cluster-versions for authoritative support dates instead of a hardcoded version list - the window moves roughly every 4 months (as of Jul 2026: 1.30-1.32 are in extended support, 1.33 flips Jul 29, 2026; latest is 1.36)."
+    recommendation: Upgrade clusters to a standard-support Kubernetes version, or budget the $438/month extended-support control plane rate
 
   - id: FARGATE-001
     name: Over-provisioned Fargate Tasks
@@ -1927,5 +2007,5 @@ storage_advanced:
 #   NET-017 (DT Breakdown), R53-001 (Unused Zones), RI-007 (RI Purchase Rec),
 #   SP-005 (SP Purchase Rec), CT-001 (CloudTrail Data Events),
 #   SECRETS-001 (Unused Secrets), ECR-001 (Image Lifecycle)
-# Total: 174 checks
+# Total: 180 checks
 # ============================================================================

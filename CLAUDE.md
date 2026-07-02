@@ -2,7 +2,7 @@
 
 ## Overview
 
-174 automated cost optimization checks across 11 domains.
+180 automated cost optimization checks across 11 domains.
 Integrates **AWS Compute Optimizer** (free ML-powered rightsizing/idle detection),
 **Data Transfer cost analysis** (USAGE_TYPE breakdown), **Public IPv4 charge detection**, and **Reservation Purchase Recommendations**.
 Designed for use with **Claude Code + AWS MCP** for direct account scanning.
@@ -119,17 +119,17 @@ Then generate markdown:
 python main.py report --findings findings.json
 ```
 
-## Check Summary (174 Total)
+## Check Summary (180 Total)
 
 | Domain | Checks | Key Checks |
 |--------|--------|------------|
-| **Compute** | 27 | EC2 idle, Compute Optimizer ML rightsizing/idle, memory check, GP2→GP3, Graviton |
+| **Compute** | 28 | EC2 idle, Compute Optimizer ML rightsizing/idle, Cost Optimization Hub, memory check, GP2→GP3, Graviton |
 | **Storage** | 24 | S3 lifecycle, EBS unattached, CloudWatch Logs, Secrets Manager, CloudTrail data events |
-| **Database** | 15 | RDS idle, over-provisioned, RI coverage |
+| **Database** | 17 | RDS idle, over-provisioned, extended support charges, Redis→Valkey migration, RI coverage |
 | **Networking** | 19 | Unused EIPs, NAT data processing, data transfer breakdown, public IPv4, VPC endpoints, Route 53 |
-| **Serverless** | 10 | Lambda memory, unused functions, ARM64 |
-| **Reservations** | 12 | RI/SP coverage gaps, RI purchase recommendations, SP purchase recommendations |
-| **Containers** | 16 | ECS/EKS idle, Fargate optimization, Spot opportunity, ECR lifecycle |
+| **Serverless** | 11 | Lambda memory, unused functions, ARM64, SQS provisioned-mode idle |
+| **Reservations** | 13 | RI/SP coverage gaps, RI/SP/Database SP purchase recommendations |
+| **Containers** | 17 | ECS/EKS idle, extended support versions, Fargate optimization, Spot opportunity, ECR lifecycle |
 | **Advanced DBs** | 18 | Aurora, DocumentDB, Neptune, Redshift optimization |
 | **Analytics** | 15 | SageMaker, EMR, OpenSearch, QuickSight |
 | **Data Pipelines** | 12 | Kinesis, MSK, Glue, EventBridge |
@@ -155,7 +155,7 @@ claude-aws-cost-saver/
 │       ├── commands/
 │       │   └── scan.md
 │       ├── checks/
-│       │   └── all_checks.yaml  # All 174 check definitions
+│       │   └── all_checks.yaml  # All 180 check definitions
 │       ├── hooks/
 │       │   └── hooks.json       # PreToolUse read-only guard
 │       ├── scripts/
@@ -278,7 +278,10 @@ aws ec2 describe-images --owners self
 aws autoscaling describe-auto-scaling-groups
 aws compute-optimizer get-enrollment-status
 aws compute-optimizer get-ec2-instance-recommendations
-aws compute-optimizer get-ec2-instance-recommendations --filters name=Finding,values=Idle
+aws compute-optimizer get-idle-recommendations
+aws cost-optimization-hub list-enrollment-statuses --region us-east-1
+aws cost-optimization-hub list-recommendation-summaries --group-by ResourceType --region us-east-1
+aws cost-optimization-hub list-recommendations --include-all-recommendations --region us-east-1
 aws cloudwatch list-metrics --namespace CWAgent --metric-name mem_used_percent --dimensions Name=InstanceId,Value={id}
 ```
 
@@ -299,9 +302,11 @@ aws secretsmanager describe-secret --secret-id {secret_id}
 aws rds describe-db-instances
 aws rds describe-db-snapshots --snapshot-type manual
 aws rds describe-reserved-db-instances
+aws rds describe-db-major-engine-versions
 aws dynamodb list-tables
 aws dynamodb describe-table --table-name {name}
 aws elasticache describe-cache-clusters
+aws elasticache describe-replication-groups
 ```
 
 ### Networking
@@ -334,6 +339,7 @@ aws savingsplans describe-savings-plans
 aws ec2 describe-reserved-instances
 aws ce get-reservation-purchase-recommendation --service "Amazon Elastic Compute Cloud - Compute" --term-in-years ONE_YEAR --payment-option PARTIAL_UPFRONT --lookback-period-in-days SIXTY_DAYS
 aws ce get-savings-plans-purchase-recommendation --savings-plans-type COMPUTE_SP --term-in-years ONE_YEAR --payment-option PARTIAL_UPFRONT --lookback-period-in-days SIXTY_DAYS
+aws ce get-savings-plans-purchase-recommendation --savings-plans-type DATABASE_SP --term-in-years ONE_YEAR --payment-option NO_UPFRONT --lookback-period-in-days SIXTY_DAYS
 ```
 
 ### Containers
@@ -346,6 +352,7 @@ aws ecs describe-task-definition --task-definition {task_def}
 aws eks list-clusters
 aws eks list-nodegroups --cluster-name {cluster}
 aws eks describe-nodegroup --cluster-name {cluster} --nodegroup-name {nodegroup}
+aws eks describe-cluster-versions
 aws ecr describe-repositories
 aws ecr get-lifecycle-policy --repository-name {repo_name}
 aws ecr describe-images --repository-name {repo_name} --filter tagStatus=UNTAGGED
@@ -470,7 +477,7 @@ Supported formats: Parquet (preferred), CSV
 ```
 1. Discover account & regions
 2. Ask compliance (HIPAA, SOC2, PCI-DSS)
-3. Check Compute Optimizer enrollment (free ML rightsizing)
+3. Check Compute Optimizer + Cost Optimization Hub enrollment (both free)
 4. Get actual monthly spend + data transfer breakdown from Cost Explorer
 5. Parallel domain scan (11 agents)
 6. Quick review (2 checks: resource age, environment)
